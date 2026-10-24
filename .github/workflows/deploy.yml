@@ -12,11 +12,16 @@ jobs:
     steps:
       - name: Deploy to Azure VM over SSH
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
+          VM_HOST: ${{ secrets.AZURE_VM_HOST }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
         with:
           host: ${{ secrets.AZURE_VM_HOST }}
           username: ${{ secrets.AZURE_VM_USER }}
-          password: ${{ secrets.AZURE_VM_PASSWORD }}
+          key: ${{ secrets.AZURE_VM_SSH_KEY }}
           port: 22
+          envs: GH_PAT,VM_HOST,GOOGLE_API_KEY
           script_stop: true
           script: |
             echo "Deploying FinSort Optimizer via Nginx (Port 80)..."
@@ -27,7 +32,7 @@ jobs:
             
             # 2. Authenticated pull / clone using GH_PAT
             for repo in utho_backend utho_frontend utho_ai_app; do
-              AUTH_URL="https://${{ secrets.GH_PAT }}@github.com/Channel-VK/${repo}.git"
+              AUTH_URL="https://$GH_PAT@github.com/Channel-VK/$repo.git"
             
               if [ -d "$repo" ]; then
                 echo "Updating $repo..."
@@ -38,7 +43,7 @@ jobs:
                 cd ..
               else
                 echo "Cloning $repo..."
-                git clone "$AUTH_URL" || git clone "https://${{ secrets.GH_PAT }}@github.com/risvanthkm/${repo}.git"
+                git clone "$AUTH_URL" || git clone "https://$GH_PAT@github.com/risvanthkm/$repo.git"
               fi
             done
             
@@ -48,7 +53,7 @@ jobs:
             # 4. Map Frontend Nginx directly to Port 80
             export FRONTEND_PORT=80
             export VITE_API_BASE_URL=/api/v1
-            export GOOGLE_API_KEY="${{ secrets.GOOGLE_API_KEY }}"
+            export GOOGLE_API_KEY="$GOOGLE_API_KEY"
             
             # 5. Build and launch all 4 containers
             echo "--> Building and starting services..."
@@ -62,7 +67,7 @@ jobs:
             
             # 7. Smoke test public Port 80 and routed API endpoints
             echo "--> Running smoke tests on Port 80..."
-            curl -s -f http://localhost/ >/dev/null && echo "Nginx React SPA (:80) Live" || echo "Frontend failed"
-            curl -s -f http://localhost/api/v1/status >/dev/null && echo "Nginx -> Go Backend (/api/v1/status) Proxy Live" || echo "API Proxy failed"
+            curl -s -f http://localhost/ >/dev/null && echo "✅ Nginx React SPA (:80) Live" || echo "❌ Frontend failed"
+            curl -s -f http://localhost/api/v1/status >/dev/null && echo "✅ Nginx -> Go Backend (/api/v1/status) Proxy Live" || echo "❌ API Proxy failed"
             
-            echo "Deployment Succeeded! Live at: http://${{ secrets.AZURE_VM_HOST }}/"
+            echo "Deployment Succeeded! Live at: http://$VM_HOST/"
