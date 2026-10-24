@@ -1,4 +1,4 @@
-name: Deploy FinSort to Azure (Port 80 Nginx)
+name: Deploy FinSort Optimizer to Azure (Port 80)
 
 on:
   push:
@@ -15,23 +15,30 @@ jobs:
         with:
           host: ${{ secrets.AZURE_VM_HOST }}
           username: ${{ secrets.AZURE_VM_USER }}
-          key: ${{ secrets.AZURE_VM_SSH_KEY }}
+          password: ${{ secrets.AZURE_VM_PASSWORD }}
           port: 22
           script_stop: true
           script: |
-            echo "Deploying FinSort Optimizer via Nginx (Port 80)"
+            echo "Deploying FinSort Optimizer via Nginx (Port 80)..."
             
-            # 1. Navigate to workspace
+            # 1. Workspace directory
+            mkdir -p ~/transfinitte_26
             cd ~/transfinitte_26
             
-            # 2. Pull latest code across all 3 sibling repositories
+            # 2. Authenticated pull / clone using GH_PAT
             for repo in utho_backend utho_frontend utho_ai_app; do
+              AUTH_URL="https://${{ secrets.GH_PAT }}@github.com/Channel-VK/${repo}.git"
+            
               if [ -d "$repo" ]; then
                 echo "Updating $repo..."
-                cd "$repo" && git fetch origin && git reset --hard origin/main && cd ..
+                cd "$repo"
+                git remote set-url origin "$AUTH_URL"
+                git fetch origin
+                git reset --hard origin/main
+                cd ..
               else
                 echo "Cloning $repo..."
-                git clone "https://github.com/Channel-VK/${repo}.git" || git clone "https://github.com/risvanthkm/${repo}.git"
+                git clone "$AUTH_URL" || git clone "https://${{ secrets.GH_PAT }}@github.com/risvanthkm/${repo}.git"
               fi
             done
             
