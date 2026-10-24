@@ -26,54 +26,60 @@ jobs:
           script_stop: true
           script: |
             echo "Deploying FinSort Optimizer via Nginx (Port 80)..."
-            
-            # 1. Workspace directory
             mkdir -p ~/transfinitte_26
             cd ~/transfinitte_26
-            
-            # 2. Authenticated pull / clone (risvanthkm for AI app, Channel-VK for others)
-            for repo in utho_backend utho_frontend utho_ai_app; do
-              if [ "$repo" = "utho_ai_app" ]; then
-                AUTH_URL="https://$GH_PAT@github.com/risvanthkm/$repo.git"
-              else
-                AUTH_URL="https://$GH_PAT@github.com/Channel-VK/$repo.git"
-              fi
-            
-              if [ -d "$repo" ]; then
-                echo "Updating $repo..."
-                cd "$repo"
-                git remote set-url origin "$AUTH_URL"
-                git fetch origin
-                BRANCH=$(git rev-parse --abbrev-ref HEAD)
-                git reset --hard "origin/$BRANCH"
-                cd ..
-              else
-                echo "Cloning $repo..."
-                git clone "$AUTH_URL"
-              fi
-            done
-            
-            # 3. Enter deployment directory
+
+            # 1. Update utho_backend (master branch)
+            echo "--> Updating utho_backend..."
+            if [ ! -d "utho_backend" ]; then
+              git clone "https://$GH_PAT@github.com/Channel-VK/utho_backend.git"
+            fi
+            cd ~/transfinitte_26/utho_backend
+            git remote set-url origin "https://$GH_PAT@github.com/Channel-VK/utho_backend.git"
+            git fetch origin
+            git reset --hard origin/master
+
+            # 2. Update utho_frontend (main branch)
+            echo "--> Updating utho_frontend..."
+            cd ~/transfinitte_26
+            if [ ! -d "utho_frontend" ]; then
+              git clone "https://$GH_PAT@github.com/Channel-VK/utho_frontend.git"
+            fi
+            cd ~/transfinitte_26/utho_frontend
+            git remote set-url origin "https://$GH_PAT@github.com/Channel-VK/utho_frontend.git"
+            git fetch origin
+            git reset --hard origin/main
+
+            # 3. Update utho_ai_app (risvanthkm repository)
+            echo "--> Updating utho_ai_app..."
+            cd ~/transfinitte_26
+            if [ ! -d "utho_ai_app" ]; then
+              git clone "https://$GH_PAT@github.com/risvanthkm/utho_ai_app.git"
+            fi
+            cd ~/transfinitte_26/utho_ai_app
+            git remote set-url origin "https://$GH_PAT@github.com/risvanthkm/utho_ai_app.git"
+            git fetch origin
+            git reset --hard origin/main || git reset --hard origin/master
+
+            # 4. Deploy all 4 containers with Docker Compose
+            echo "--> Starting Docker containers on Port 80..."
             cd ~/transfinitte_26/utho_backend
             
-            # 4. Map Frontend Nginx directly to Port 80
             export FRONTEND_PORT=80
             export VITE_API_BASE_URL=/api/v1
             export GOOGLE_API_KEY="$GOOGLE_API_KEY"
-            
-            # 5. Build and launch all 4 containers
-            echo "--> Building and starting services..."
+
             docker compose down --remove-orphans || true
             FRONTEND_PORT=80 docker compose up --build -d
-            
-            # 6. Wait for health checks
+
+            # 5. Wait for health checks
             echo "--> Waiting for containers to become healthy..."
             sleep 8
             docker compose ps
-            
-            # 7. Smoke test public Port 80 and routed API endpoints
+
+            # 6. Verify Nginx and API on Port 80
             echo "--> Running smoke tests on Port 80..."
             curl -s -f http://localhost/ >/dev/null && echo "✅ Nginx React SPA (:80) Live" || echo "❌ Frontend failed"
             curl -s -f http://localhost/api/v1/status >/dev/null && echo "✅ Nginx -> Go Backend (/api/v1/status) Proxy Live" || echo "❌ API Proxy failed"
-            
+
             echo "Deployment Succeeded! Live at: http://$VM_HOST/"
