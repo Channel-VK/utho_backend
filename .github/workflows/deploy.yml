@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - master
   workflow_dispatch:
 
 jobs:
@@ -30,7 +31,7 @@ jobs:
             mkdir -p ~/transfinitte_26
             cd ~/transfinitte_26
             
-            # 2. Authenticated pull / clone using GH_PAT
+            # 2. Authenticated pull / clone using GH_PAT (auto-detects master or main)
             for repo in utho_backend utho_frontend utho_ai_app; do
               AUTH_URL="https://$GH_PAT@github.com/Channel-VK/$repo.git"
             
@@ -39,7 +40,8 @@ jobs:
                 cd "$repo"
                 git remote set-url origin "$AUTH_URL"
                 git fetch origin
-                git reset --hard origin/main
+                BRANCH=$(git rev-parse --abbrev-ref HEAD)
+                git reset --hard "origin/$BRANCH"
                 cd ..
               else
                 echo "Cloning $repo..."
