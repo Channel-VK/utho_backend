@@ -511,6 +511,82 @@ func (c *Client) GetRoleBriefing(role string, dash models.DashboardData) models.
 	}
 }
 
+// Chat proxies the user query to Python :8001 /chat, with a deterministic fallback if offline.
+func (c *Client) Chat(req models.ChatRequest) models.ChatResponse {
+	ctx, cancel := context.WithTimeout(context.Background(), 8000*time.Millisecond)
+	defer cancel()
+
+	payload, err := json.Marshal(req)
+	if err == nil {
+		httpReq, errReq := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/chat", bytes.NewBuffer(payload))
+		if errReq == nil {
+			httpReq.Header.Set("Content-Type", "application/json")
+			if resp, errDo := c.httpClient.Do(httpReq); errDo == nil {
+				defer resp.Body.Close()
+				if resp.StatusCode == http.StatusOK {
+					var out models.ChatResponse
+					if errDec := json.NewDecoder(resp.Body).Decode(&out); errDec == nil && out.Answer != "" {
+						return out
+					}
+				}
+			}
+		}
+	}
+
+	// Deterministic fallback response
+	convID := req.ConversationID
+	if convID == "" {
+		convID = "conv-deterministic-session"
+	}
+	lower := strings.ToLower(req.Message)
+	answer := "SmartCloud FinOps Engine: Actively monitoring 85 Utho Cloud resources across Mumbai, Bangalore, and Noida. 20 compute workloads are eligible for peak-safe rightsizing saving ₹1,50,310/mo, while 10 bursty VMs are protected by the Peak-Safety Governor. You can ask about rightsizing, cost forecasting, what-if shutdown scenarios, or specific instance metrics."
+	tool := "dashboard_summary"
+
+	if strings.Contains(lower, "rightsiz") || strings.Contains(lower, "downsize") || strings.Contains(lower, "save") {
+		answer = "Identified 20 rightsizing candidates saving ₹1,50,310/mo. Top candidate: prod-search-indexer-04 (m8.2xlarge → m8.xlarge) saving ₹9,600/mo under verified p95/p99 peak headroom ceilings."
+		tool = "rightsizing"
+	} else if strings.Contains(lower, "what if") || strings.Contains(lower, "shut down") || strings.Contains(lower, "schedule") {
+		answer = "What-If Simulation: Halting non-production dev/staging boxes during off-peak hours (8 PM - 8 AM IST and weekends) cuts waste by 118 hrs/wk, projecting up to ₹82,200/mo in net runway gains."
+		tool = "what_if"
+	} else if strings.Contains(lower, "forecast") || strings.Contains(lower, "cost") {
+		answer = "Multi-Horizon Cost Forecast: 30-day projected spend under recommended plans drops from ₹6,83,200 to ₹5,32,890 (-22.0%), locking in ₹1,50,310 in recurring monthly savings."
+		tool = "cost_forecast"
+	} else if strings.Contains(lower, "alert") || strings.Contains(lower, "incident") || strings.Contains(lower, "ttf") {
+		answer = "Active Telemetry Incidents: ALT-001 (search indexer heap leak, TTF ~14.0h), ALT-002 (orphaned staging test cluster), and ALT-003 (PostgreSQL WAL volume growth, TTF ~9.8d). Mitigations are staged."
+		tool = "alerts"
+	}
+
+	return models.ChatResponse{
+		ConversationID: convID,
+		Answer:         answer,
+		Tool:           tool,
+		Model:          "Deterministic-SRE-Fallback",
+	}
+}
+
+// GetChatHistory fetches conversation history from Python :8001 /chat/{id}.
+func (c *Client) GetChatHistory(conversationID string) (models.ChatHistoryResponse, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 4000*time.Millisecond)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/chat/"+conversationID, nil)
+	if err != nil {
+		return models.ChatHistoryResponse{ConversationID: conversationID}, err
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return models.ChatHistoryResponse{ConversationID: conversationID}, err
+	}
+	defer resp.Body.Close()
+
+	var out models.ChatHistoryResponse
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return models.ChatHistoryResponse{ConversationID: conversationID}, err
+	}
+	return out, nil
+}
+
 func (c *Client) generateDeterministicAnalysis(res models.Resource) *models.EngineeringAnalysis {
 	defaultQuantiles := []models.QuantileForecastPoint{
 		{Timestamp: "2026-10-24T04:00:00Z", HourLabel: "+4h (09:00 IST)", CPUQ10: 9.2, CPUQ50: 14.5, CPUQ90: 22.0, MemQ10: 18.0, MemQ50: 22.5, MemQ90: 28.0},

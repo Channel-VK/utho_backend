@@ -2,8 +2,33 @@ name: smartcloud-finops
 
 services:
   # ---------------------------------------------------------------------------
-  # 1. Python AI & ML Engine (:8001)
-  #    Forecasting, Jev Risk, 3-Sigma Anomaly Correlation, NL Parser & Briefings
+  # 1. TimescaleDB (PostgreSQL 16 with TimescaleDB Hypertable extension)
+  #    Stores fleet inventory, pricing catalog, telemetry hypertable & chat history
+  # ---------------------------------------------------------------------------
+  timescale-db:
+    container_name: timescale-db
+    image: timescale/timescaledb:2.17.2-pg16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-resource_advisor}
+      POSTGRES_USER: ${POSTGRES_USER:-resource_advisor}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-this-local-password}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ${AI_APP_PATH:-../utho_ai_app}/db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - smartcloud-net
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # 2. Python AI & ML Engine (:8001) with Chatbot & TimescaleDB Telemetry
+  #    Forecasting, Jev Risk, 3-Sigma Anomaly Correlation, NL Parser & Chatbot
   # ---------------------------------------------------------------------------
   utho-ai:
     container_name: utho-ai
@@ -14,6 +39,7 @@ services:
       - "${AI_PORT:-8001}:8001"
     environment:
       PORT: "8001"
+      DATABASE_URL: postgresql://${POSTGRES_USER:-resource_advisor}:${POSTGRES_PASSWORD:-change-this-local-password}@timescale-db:5432/${POSTGRES_DB:-resource_advisor}
       GO_BACKEND_URL: "http://utho-backend:8080"
       INVENTORY_PATH: /app/datasets/raw/inventory.csv
       PRICING_PATH: /app/datasets/raw/pricing.csv
@@ -31,6 +57,9 @@ services:
     volumes:
       - ${AI_APP_PATH:-../utho_ai_app}/datasets/raw:/app/datasets/raw:ro
       - model_data:/app/models
+    depends_on:
+      timescale-db:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=3)"]
       interval: 10s
@@ -42,8 +71,8 @@ services:
     restart: unless-stopped
 
   # ---------------------------------------------------------------------------
-  # 2. Go FinOps Core Engine & Unified API Gateway (:8080)
-  #    85 Utho Cloud INR Resources, Peak-Safe Rightsizing & AI Proxy
+  # 3. Go FinOps Core Engine & Unified API Gateway (:8080)
+  #    85 Utho Cloud INR Resources, Peak-Safe Rightsizing, AI Proxy & Chat Gateway
   # ---------------------------------------------------------------------------
   utho-backend:
     container_name: utho-backend
@@ -69,7 +98,7 @@ services:
     restart: unless-stopped
 
   # ---------------------------------------------------------------------------
-  # 3. React + TypeScript Glassmorphic FinOps Console (:5173 -> Nginx :80)
+  # 4. React + TypeScript Glassmorphic FinOps Console (:5173 -> Nginx :80)
   #    Serves SPA and reverse-proxies /api/v1/* to utho-backend:8080
   # ---------------------------------------------------------------------------
   utho-frontend:
@@ -99,4 +128,5 @@ networks:
     driver: bridge
 
 volumes:
+  postgres_data:
   model_data:

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # =============================================================================
 # SmartCloud Optimizer (FinSort) — WSL2 & Linux One-Command Docker Launcher
-# Clones missing sibling repos automatically (if needed), builds all 3 Docker
-# images, launches the unified stack, and verifies end-to-end health.
+# Clones missing sibling repos automatically (if needed), builds all Docker
+# images (TimescaleDB, Python AI, Go Backend, React Nginx), and verifies health.
 # =============================================================================
 set -euo pipefail
 
@@ -26,19 +26,20 @@ fi
 
 cd "$SCRIPT_DIR"
 
-# 2. Build and launch all 3 containers
-echo "[1/2] Building and starting utho-ai (:8001), utho-backend (:8080), and utho-frontend (:5173)..."
+# 2. Build and launch all 4 containers
+echo "[1/2] Building and starting timescale-db (:5432), utho-ai (:8001), utho-backend (:8080), and utho-frontend (:5173)..."
 docker compose up --build -d
 
 # 3. Verify health endpoints
 echo "[2/2] Waiting for services to report healthy..."
-sleep 5
+sleep 6
 
 echo ""
 echo "------------------------------------------------------------------"
 echo "  Service Endpoints:"
 echo "  * FinSort Web Console (Nginx + SPA) : http://localhost:${FRONTEND_PORT:-5173}"
 echo "  * Go FinOps API Gateway             : http://localhost:${BACKEND_PORT:-8080}/api/v1/status"
-echo "  * Python AI Microservice            : http://localhost:${AI_PORT:-8001}/health"
+echo "  * Python AI Engine & Chatbot API   : http://localhost:${AI_PORT:-8001}/health"
+echo "  * TimescaleDB Telemetry Database    : localhost:${DB_PORT:-5432}"
 echo "------------------------------------------------------------------"
 docker compose ps

@@ -426,3 +426,33 @@ type AIBriefingResponse struct {
 	BulletPoints []string         `json:"bullet_points"`
 	KeyMetrics   []BriefingMetric `json:"key_metrics"`
 }
+
+// ChatRequest is the payload for POST /api/v1/ai/chat.
+type ChatRequest struct {
+	Message        string `json:"message"`
+	ConversationID string `json:"conversation_id,omitempty"`
+}
+
+// ChatResponse is returned by POST /api/v1/ai/chat.
+type ChatResponse struct {
+	ConversationID string `json:"conversation_id"`
+	Answer         string `json:"answer"`
+	Tool           string `json:"tool,omitempty"`
+	Data           any    `json:"data,omitempty"`
+	Model          string `json:"model,omitempty"`
+}
+
+// ChatMessage represents a single message in conversation history.
+type ChatMessage struct {
+	Role      string `json:"role"`
+	Content   string `json:"content"`
+	CreatedAt string `json:"created_at"`
+}
+
+// ChatHistoryResponse is returned by GET /api/v1/ai/chat/{id}.
+type ChatHistoryResponse struct {
+	ConversationID string        `json:"conversation_id"`
+	CreatedAt      string        `json:"created_at"`
+	UpdatedAt      string        `json:"updated_at"`
+	Messages       []ChatMessage `json:"messages"`
+}

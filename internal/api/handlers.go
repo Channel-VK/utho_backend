@@ -68,6 +68,10 @@ func (s *Store) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/ai/forecast", s.HandleAIForecast)
 	mux.HandleFunc("POST /api/v1/ai/briefing", s.HandleAIBriefing)
 	mux.HandleFunc("GET /api/v1/ai/alerts-analysis", s.HandleGetAlerts)
+	mux.HandleFunc("POST /api/v1/ai/chat", s.HandleAIChat)
+	mux.HandleFunc("GET /api/v1/ai/chat/{id}", s.HandleAIGetChatHistory)
+	mux.HandleFunc("POST /api/v1/chat", s.HandleAIChat)
+	mux.HandleFunc("GET /api/v1/chat/{id}", s.HandleAIGetChatHistory)
 }
 
 // HandleGetStatus reports connection telemetry for both Go Engine (:8080) and Python AI (:8001).
@@ -549,6 +553,43 @@ func (s *Store) HandleExportRemediation(w http.ResponseWriter, r *http.Request) 
 	s.mu.RUnlock()
 
 	writeJSON(w, http.StatusOK, export)
+}
+
+// HandleAIChat proxies the user chat query to Python AI microservice (:8001 /chat).
+func (s *Store) HandleAIChat(w http.ResponseWriter, r *http.Request) {
+	var req models.ChatRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid json body"}`, http.StatusBadRequest)
+		return
+	}
+	if strings.TrimSpace(req.Message) == "" {
+		http.Error(w, `{"error":"message cannot be empty"}`, http.StatusBadRequest)
+		return
+	}
+
+	resp := s.aiClient.Chat(req)
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// HandleAIGetChatHistory fetches conversation turns for a given session ID.
+func (s *Store) HandleAIGetChatHistory(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == "" {
+		http.Error(w, `{"error":"conversation id required"}`, http.StatusBadRequest)
+		return
+	}
+
+	history, err := s.aiClient.GetChatHistory(id)
+	if err != nil {
+		// Return empty history shell rather than failing
+		history = models.ChatHistoryResponse{
+			ConversationID: id,
+			CreatedAt:      time.Now().UTC().Format(time.RFC3339),
+			UpdatedAt:      time.Now().UTC().Format(time.RFC3339),
+			Messages:       []models.ChatMessage{},
+		}
+	}
+	writeJSON(w, http.StatusOK, history)
 }
 
 func writeJSON(w http.ResponseWriter, status int, data any) {
