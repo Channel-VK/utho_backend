@@ -29,7 +29,7 @@ jobs:
             mkdir -p ~/transfinitte_26
             cd ~/transfinitte_26
 
-            # 1. Update utho_backend (master branch)
+            # 1. Update utho_backend (master)
             echo "--> Updating utho_backend..."
             if [ ! -d "utho_backend" ]; then
               git clone "https://$GH_PAT@github.com/Channel-VK/utho_backend.git"
@@ -37,9 +37,9 @@ jobs:
             cd ~/transfinitte_26/utho_backend
             git remote set-url origin "https://$GH_PAT@github.com/Channel-VK/utho_backend.git"
             git fetch origin
-            git reset --hard origin/master
+            git reset --hard origin/master 2>/dev/null || git reset --hard origin/main 2>/dev/null
 
-            # 2. Update utho_frontend (main branch)
+            # 2. Update utho_frontend (master)
             echo "--> Updating utho_frontend..."
             cd ~/transfinitte_26
             if [ ! -d "utho_frontend" ]; then
@@ -48,9 +48,9 @@ jobs:
             cd ~/transfinitte_26/utho_frontend
             git remote set-url origin "https://$GH_PAT@github.com/Channel-VK/utho_frontend.git"
             git fetch origin
-            git reset --hard origin/main
+            git reset --hard origin/master 2>/dev/null || git reset --hard origin/main 2>/dev/null
 
-            # 3. Update utho_ai_app (risvanthkm repository)
+            # 3. Update utho_ai_app (main)
             echo "--> Updating utho_ai_app..."
             cd ~/transfinitte_26
             if [ ! -d "utho_ai_app" ]; then
@@ -59,7 +59,7 @@ jobs:
             cd ~/transfinitte_26/utho_ai_app
             git remote set-url origin "https://$GH_PAT@github.com/risvanthkm/utho_ai_app.git"
             git fetch origin
-            git reset --hard origin/main || git reset --hard origin/master
+            git reset --hard origin/main 2>/dev/null || git reset --hard origin/master 2>/dev/null
 
             # 4. Deploy all 4 containers with Docker Compose
             echo "--> Starting Docker containers on Port 80..."
