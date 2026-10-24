@@ -31,9 +31,13 @@ jobs:
             mkdir -p ~/transfinitte_26
             cd ~/transfinitte_26
             
-            # 2. Authenticated pull / clone using GH_PAT (auto-detects master or main)
+            # 2. Authenticated pull / clone (risvanthkm for AI app, Channel-VK for others)
             for repo in utho_backend utho_frontend utho_ai_app; do
-              AUTH_URL="https://$GH_PAT@github.com/Channel-VK/$repo.git"
+              if [ "$repo" = "utho_ai_app" ]; then
+                AUTH_URL="https://$GH_PAT@github.com/risvanthkm/$repo.git"
+              else
+                AUTH_URL="https://$GH_PAT@github.com/Channel-VK/$repo.git"
+              fi
             
               if [ -d "$repo" ]; then
                 echo "Updating $repo..."
@@ -45,7 +49,7 @@ jobs:
                 cd ..
               else
                 echo "Cloning $repo..."
-                git clone "$AUTH_URL" || git clone "https://$GH_PAT@github.com/risvanthkm/$repo.git"
+                git clone "$AUTH_URL"
               fi
             done
             
