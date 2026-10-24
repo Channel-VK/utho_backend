@@ -61,8 +61,12 @@ jobs:
             git fetch origin
             git reset --hard origin/main 2>/dev/null || git reset --hard origin/master 2>/dev/null
 
-            # 4. Deploy all 4 containers with Docker Compose
-            echo "--> Starting Docker containers on Port 80..."
+            # 4. Free Port 80 from host apache/nginx & Deploy all 4 containers
+            echo "--> Freeing Port 80 and launching Docker containers..."
+            sudo systemctl stop apache2 nginx 2>/dev/null || true
+            sudo systemctl disable apache2 nginx 2>/dev/null || true
+            sudo fuser -k 80/tcp 2>/dev/null || true
+
             cd ~/transfinitte_26/utho_backend
             
             export FRONTEND_PORT=80
