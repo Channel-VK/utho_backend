@@ -837,7 +837,7 @@ func (c *Client) ChatWithContext(req models.ChatRequest, resources []models.Reso
 		}
 	}
 
-	if strings.Contains(lower, "forecast") || strings.Contains(lower, "tft") || strings.Contains(lower, "p10") || strings.Contains(lower, "p50") || strings.Contains(lower, "p90") || strings.Contains(lower, "30") || strings.Contains(lower, "60") || strings.Contains(lower, "90") {
+	if strings.Contains(lower, "forecast") || strings.Contains(lower, "tft") || strings.Contains(lower, "p10") || strings.Contains(lower, "p50") || strings.Contains(lower, "p90") || strings.Contains(lower, "30d") || strings.Contains(lower, "60d") || strings.Contains(lower, "90d") {
 		ans := fmt.Sprintf(
 			"TFT Multi-Horizon Quantile Forecast (`QuantileTemporalTransformer-90d`):\n"+
 				"• Model Validation: Val MAE = 0.5722 vs Seasonal-Naive Baseline MAE = 0.8715 (-34.3%% error reduction).\n"+
@@ -852,26 +852,6 @@ func (c *Client) ChatWithContext(req models.ChatRequest, resources []models.Reso
 			ConversationID: convID,
 			Answer:         ans,
 			Tool:           "tft_quantile_forecast",
-			Data:           fullContext["fleet_summary"],
-			Model:          "gemini-3.8-flash",
-		}
-	}
-
-	if strings.Contains(lower, "approv") || strings.Contains(lower, "accept") || strings.Contains(lower, "pending") || strings.Contains(lower, "saving") || strings.Contains(lower, "save") || strings.Contains(lower, "rightsize") || strings.Contains(lower, "recommend") {
-		ans := fmt.Sprintf(
-			"FinSort Live Recommendations & Savings Summary (85 Utho Cloud Resources):\n"+
-				"• Current Monthly Spend (Before): ₹%.0f/mo\n"+
-				"• Projected Spend (After Approved): ₹%.0f/mo\n"+
-				"• Approved (Accepted) Recommendations: %d actions saving ₹%.0f/mo (₹%.0f/yr)\n"+
-				"• Pending Recommendations: %d actions with ₹%.0f/mo additional unclaimed savings\n"+
-				"• Total Potential Savings: ₹%.0f/mo (₹%.0f/yr) across VM rightsizing, 118h/wk off-hours schedules, zombie termination, and orphaned SSD/IPv4 cleanup.\n"+
-				"• Peak-Safety Protection: %d bursty VMs (p99 >= 85%%) are locked from downsizing.",
-			currentSpend, projectedSpend, acceptedCount, acceptedSavings, acceptedSavings*12, pendingCount, pendingSavings, totalSavings, totalSavings*12, protectedCount,
-		)
-		return models.ChatResponse{
-			ConversationID: convID,
-			Answer:         ans,
-			Tool:           "recommendations_summary",
 			Data:           fullContext["fleet_summary"],
 			Model:          "gemini-3.8-flash",
 		}
