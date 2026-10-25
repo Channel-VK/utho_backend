@@ -1,5 +1,9 @@
 # FinSort — Go FinOps & Rightsizing Engine (`utho_backend`)
 
+[![Launch Live Platform — utho.risvanth.online](https://img.shields.io/badge/LIVE_DEPLOYMENT-utho.risvanth.online-111318?style=for-the-badge&labelColor=1D5C46)](http://utho.risvanth.online)
+
+**Live Demo:** **[http://utho.risvanth.online](http://utho.risvanth.online)**
+
 > **Jury Overview:** `utho_backend` is the high-throughput, peak-safe FinOps rule engine and API gateway for **FinSort** on **Utho Cloud** (`in-mumbai-1`, `in-noida-1`, `in-bangalore-1`). Addressing a 40% 6-month cloud spend surge (`₹4,85,000/mo → ₹6,79,000/mo`), it evaluates 30 days of continuous telemetry across **85 resources** (`Seed 42`) using **`p95`/`p99` peak-safety math**, powers interactive What-If simulations, generates **Utho Cloud Terraform HCL (`.tf`) & CLI (`.sh`) manifests**, and bridges to the Python AI service (`:8001`) with automatic zero-downtime deterministic fallback.
 
 ---
