@@ -301,10 +301,12 @@ func (c *Client) CorrelateAlerts(alerts []models.Alert, resources []models.Resou
 	return out
 }
 
-// GetAIForecast queries Python :8001 for 30/60/90-day component cost forecasts and GreenOps PUE modeling.
+// GetAIForecast queries Python :8001 for arbitrary horizon component cost forecasts and GreenOps PUE modeling.
 func (c *Client) GetAIForecast(days int, headroom float64, resources []models.Resource, recs []models.Recommendation) models.AIForecastResponse {
-	if days != 30 && days != 60 && days != 90 {
+	if days <= 0 {
 		days = 30
+	} else if days > 365 {
+		days = 365
 	}
 	if headroom <= 0 {
 		headroom = 1.25
@@ -655,14 +657,14 @@ func (c *Client) generateDeterministicAnalysis(res models.Resource) *models.Engi
 				"3. Traffic Drain: Shift 30% of regional ingress weight via Utho Load Balancer health checks.",
 			},
 			JevAssessment: &models.JevAssessment{
-				Model:               "jev-latest",
+				Model:               "OpenRisk-Ordinal-v1 (Open-Source)",
 				RiskScore:           2.76,
 				RiskScorePercentage: 92.0,
 				RiskLevel:           "critical",
 				ModelConfidence:     0.97,
 				Probabilities:       map[string]float64{"0": 0.01, "1": 0.05, "2": 0.16, "3": 0.78},
-				Explanation:         "Jev ordinal score normalized to 0-100% across 4 operational risk tiers.",
-				DecisionPolicy:      "Advisory only; deterministic p95/p99 capacity checks remain authoritative.",
+				Explanation:         "Open-source ordinal capacity risk score normalized across 4 operational safety tiers.",
+				DecisionPolicy:      "Deterministic capacity governors (Projected p99 < 85% and p95 <= 80%) remain authoritative.",
 			},
 			QuantileForecast24h: peakQuantiles,
 			GreenOpsImpact: &models.ResourceGreenOps{
@@ -726,14 +728,14 @@ func (c *Client) generateDeterministicAnalysis(res models.Resource) *models.Engi
 				fmt.Sprintf("3. Instant Rollback: `utho vm resize --id %s --plan %s --restart --yes` (<90s recovery).", res.ID, res.Plan),
 			},
 			JevAssessment: &models.JevAssessment{
-				Model:               "jev-latest",
+				Model:               "OpenRisk-Ordinal-v1 (Open-Source)",
 				RiskScore:           0.42,
 				RiskScorePercentage: 14.0,
 				RiskLevel:           "low",
 				ModelConfidence:     0.95,
 				Probabilities:       map[string]float64{"0": 0.74, "1": 0.21, "2": 0.04, "3": 0.01},
-				Explanation:         "Jev ordinal score normalized to 0-100% across 4 operational risk tiers.",
-				DecisionPolicy:      "Advisory only; deterministic p95/p99 capacity checks remain authoritative.",
+				Explanation:         "Open-source ordinal capacity risk score normalized across 4 operational safety tiers.",
+				DecisionPolicy:      "Deterministic capacity governors (Projected p99 < 85% and p95 <= 80%) remain authoritative.",
 			},
 			QuantileForecast24h: defaultQuantiles,
 			GreenOpsImpact: &models.ResourceGreenOps{
@@ -774,14 +776,14 @@ func (c *Client) generateDeterministicAnalysis(res models.Resource) *models.Engi
 				fmt.Sprintf("3. Disable Schedule: `utho vm schedule delete --id %s`", res.ID),
 			},
 			JevAssessment: &models.JevAssessment{
-				Model:               "jev-latest",
+				Model:               "OpenRisk-Ordinal-v1 (Open-Source)",
 				RiskScore:           0.18,
 				RiskScorePercentage: 6.0,
 				RiskLevel:           "low",
 				ModelConfidence:     0.98,
 				Probabilities:       map[string]float64{"0": 0.88, "1": 0.10, "2": 0.01, "3": 0.01},
-				Explanation:         "Jev ordinal score normalized to 0-100% across 4 operational risk tiers.",
-				DecisionPolicy:      "Advisory only; deterministic p95/p99 capacity checks remain authoritative.",
+				Explanation:         "Open-source ordinal capacity risk score normalized across 4 operational safety tiers.",
+				DecisionPolicy:      "Deterministic capacity governors (Projected p99 < 85% and p95 <= 80%) remain authoritative.",
 			},
 			QuantileForecast24h: defaultQuantiles,
 		}

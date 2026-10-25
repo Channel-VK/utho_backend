@@ -187,11 +187,12 @@ type Alert struct {
 
 // SimulationRequest is the payload for POST /api/v1/simulate.
 type SimulationRequest struct {
-	DevOffHoursEnabled         bool    `json:"dev_off_hours_enabled"`
-	DevShutdownHoursPerWeek    int     `json:"dev_shutdown_hours_per_week"`
-	StagingWeekendOffEnabled   bool    `json:"staging_weekend_off_enabled"`
-	SafetyHeadroomBufferPct    float64 `json:"safety_headroom_buffer_pct"`
-	PurgeOrphanedOlderThanDays int     `json:"purge_orphaned_older_than_days"`
+	DevOffHoursEnabled          bool    `json:"dev_off_hours_enabled"`
+	DevShutdownHoursPerWeek     int     `json:"dev_shutdown_hours_per_week"`
+	StagingWeekendOffEnabled    bool    `json:"staging_weekend_off_enabled"`
+	StagingShutdownHoursPerWeek int     `json:"staging_shutdown_hours_per_week"`
+	SafetyHeadroomBufferPct     float64 `json:"safety_headroom_buffer_pct"`
+	PurgeOrphanedOlderThanDays  int     `json:"purge_orphaned_older_than_days"`
 }
 
 // EligibleChange details changes in recommendation eligibility.

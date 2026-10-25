@@ -98,22 +98,26 @@ func Simulate(resources []models.Resource, req models.SimulationRequest) models.
 				isDev := res.Env == "dev"
 				isStaging := res.Env == "staging"
 
-				if (isDev && req.DevOffHoursEnabled) || (isStaging && req.StagingWeekendOffEnabled) {
+				if isDev && req.DevOffHoursEnabled {
 					hoursOff := float64(req.DevShutdownHoursPerWeek)
-					if hoursOff <= 0 && req.DevOffHoursEnabled {
+					if hoursOff <= 0 {
 						hoursOff = 118.0
-					}
-					if isStaging && !isDev {
-						hoursOff = 64.0 // Staging weekend off (Friday 19:00 to Monday 07:00 approx 60h)
 					}
 					ratio := (hoursOff / 168.0) * 0.95
 					savings := res.MonthlyCostINR * ratio
 					simulatedSavings += savings
-					if isStaging {
-						stagingWeekendSavings += savings
-					} else {
-						devSavings += savings
+					devSavings += savings
+					affectedCount++
+					eligibleVMsCount++
+				} else if isStaging && req.StagingWeekendOffEnabled {
+					hoursOff := float64(req.StagingShutdownHoursPerWeek)
+					if hoursOff <= 0 {
+						hoursOff = 64.0 // Staging weekend off fallback (Friday 19:00 to Monday 07:00 approx 60h)
 					}
+					ratio := (hoursOff / 168.0) * 0.95
+					savings := res.MonthlyCostINR * ratio
+					simulatedSavings += savings
+					stagingWeekendSavings += savings
 					affectedCount++
 					eligibleVMsCount++
 				}

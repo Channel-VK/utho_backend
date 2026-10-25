@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"utho_backend/internal/api"
+	"utho_backend/internal/logger"
 )
 
 // corsMiddleware wraps an http.Handler with permissive CORS headers.
@@ -27,15 +28,6 @@ func corsMiddleware(next http.Handler) http.Handler {
 		}
 
 		next.ServeHTTP(w, r)
-	})
-}
-
-// loggingMiddleware logs incoming HTTP requests.
-func loggingMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		start := time.Now()
-		next.ServeHTTP(w, r)
-		log.Printf("[%s] %s %s (took %v)", r.Method, r.URL.Path, r.RemoteAddr, time.Since(start))
 	})
 }
 
@@ -64,7 +56,7 @@ func main() {
 	// Register all FinOps API routes
 	store.RegisterRoutes(mux)
 
-	handler := corsMiddleware(loggingMiddleware(mux))
+	handler := corsMiddleware(logger.HTTPLogger(mux))
 
 	server := &http.Server{
 		Addr:         ":" + port,
