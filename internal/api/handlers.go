@@ -386,8 +386,8 @@ func (s *Store) HandleBulkRecommendations(w http.ResponseWriter, r *http.Request
 	}
 
 	status := strings.ToLower(req.Status)
-	if status != "accepted" && status != "rejected" {
-		http.Error(w, `{"error":"status must be 'accepted' or 'rejected'"}`, http.StatusBadRequest)
+	if status != "accepted" && status != "rejected" && status != "pending" {
+		http.Error(w, `{"error":"status must be 'accepted', 'rejected', or 'pending'"}`, http.StatusBadRequest)
 		return
 	}
 

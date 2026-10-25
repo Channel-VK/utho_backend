@@ -5,13 +5,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"os"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
 
+	"utho_backend/internal/catalog"
 	"utho_backend/internal/engine"
 	"utho_backend/internal/models"
 )
@@ -144,13 +147,76 @@ func (c *Client) callPythonExplain(res models.Resource) (*models.EngineeringAnal
 	return &result, nil
 }
 
-// ParseNLScenario sends natural-language query to Python :8001, falls back to Go parser if offline,
+// ParseNLScenario sends natural-language query with grounded fleet summary and pricing catalog
+// to Python :8001, falls back to deterministic Go parser if offline,
 // and computes the live SimulationResult across the 85 Utho resources.
 func (c *Client) ParseNLScenario(query string, resources []models.Resource) models.NLScenarioResponse {
 	ctx, cancel := context.WithTimeout(context.Background(), 4000*time.Millisecond)
 	defer cancel()
 
-	payload, _ := json.Marshal(map[string]string{"query": query})
+	// Construct grounded fleet summary from real 85 resources
+	totalCount := len(resources)
+	var baselineMonthlyINR float64
+	byType := make(map[string]int)
+	byEnv := make(map[string]int)
+	byRegion := make(map[string]int)
+	envSet := make(map[string]bool)
+	regionSet := make(map[string]bool)
+
+	for _, r := range resources {
+		baselineMonthlyINR += r.MonthlyCostINR
+		byType[r.Type]++
+		byEnv[r.Env]++
+		byRegion[r.Region]++
+		envSet[r.Env] = true
+		regionSet[r.Region] = true
+	}
+
+	var envs []string
+	for e := range envSet {
+		envs = append(envs, e)
+	}
+	sort.Strings(envs)
+
+	var regions []string
+	for reg := range regionSet {
+		regions = append(regions, reg)
+	}
+	sort.Strings(regions)
+
+	fleetSummary := map[string]any{
+		"total_resources":      totalCount,
+		"vm_count":             byType["vm"],
+		"block_volume_count":   byType["block_volume"],
+		"public_ip_count":      byType["public_ip"],
+		"monthly_baseline_inr": baselineMonthlyINR,
+		"by_type":              byType,
+		"by_env":               byEnv,
+		"by_region":            byRegion,
+		"envs":                 envs,
+		"regions":              regions,
+	}
+
+	// Attach Utho Cloud pricing catalog
+	catalogPricing := make(map[string]any)
+	for planName, p := range catalog.Plans {
+		catalogPricing[planName] = map[string]any{
+			"vcpu":        p.VCPU,
+			"ram_gb":      p.RAMGB,
+			"hourly_inr":  p.HourlyRateINR,
+			"monthly_inr": p.MonthlyRateINR,
+		}
+	}
+	catalogPricing["block_storage_gb_monthly"] = catalog.BlockSSDPricePerGBMonth
+	catalogPricing["public_ip_monthly"] = catalog.PublicIPv4PriceMonth
+
+	reqBody := map[string]any{
+		"query":         query,
+		"fleet_summary": fleetSummary,
+		"catalog":       catalogPricing,
+	}
+
+	payload, _ := json.Marshal(reqBody)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/api/v1/ai/parse-scenario", bytes.NewBuffer(payload))
 	if err == nil {
 		req.Header.Set("Content-Type", "application/json")
@@ -175,49 +241,158 @@ func (c *Client) ParseNLScenario(query string, resources []models.Resource) mode
 func parseNLScenarioFallback(query string) models.NLScenarioResponse {
 	lower := strings.ToLower(query)
 	params := models.SimulationRequest{
-		DevOffHoursEnabled:         true,
-		DevShutdownHoursPerWeek:    118,
-		StagingWeekendOffEnabled:   true,
-		SafetyHeadroomBufferPct:    25,
-		PurgeOrphanedOlderThanDays: 30,
+		DevOffHoursEnabled:          true,
+		DevShutdownHoursPerWeek:     118,
+		StagingWeekendOffEnabled:    true,
+		StagingShutdownHoursPerWeek: 72,
+		SafetyHeadroomBufferPct:     25,
+		PurgeOrphanedOlderThanDays:  30,
 	}
 	region := "all"
 	env := "dev"
+	shutdownStart := "20:00"
+	shutdownEnd := "08:00"
 	var tags []string
 
-	if strings.Contains(lower, "bangalore") {
+	// Region detection
+	if strings.Contains(lower, "bangalore") || strings.Contains(lower, "in-bangalore-1") {
 		region = "in-bangalore-1"
 		tags = append(tags, "Region: in-bangalore-1")
-	} else if strings.Contains(lower, "mumbai") {
+	} else if strings.Contains(lower, "mumbai") || strings.Contains(lower, "in-mumbai-1") {
 		region = "in-mumbai-1"
 		tags = append(tags, "Region: in-mumbai-1")
-	} else if strings.Contains(lower, "noida") {
+	} else if strings.Contains(lower, "noida") || strings.Contains(lower, "in-noida-1") {
 		region = "in-noida-1"
 		tags = append(tags, "Region: in-noida-1")
 	}
 
-	reHeadroom := regexp.MustCompile(`(\d{1,2})\s*%\s*(?:peak\s*)?(?:headroom|buffer|safety)`)
-	if m := reHeadroom.FindStringSubmatch(lower); len(m) > 1 {
-		if v, err := strconv.Atoi(m[1]); err == nil {
-			if v < 15 {
-				v = 15
-			} else if v > 50 {
-				v = 50
+	// Environment detection
+	if strings.Contains(lower, "staging") || strings.Contains(lower, "stage") {
+		env = "staging"
+	} else if strings.Contains(lower, "prod") || strings.Contains(lower, "production") {
+		env = "prod"
+	}
+
+	// Off-hours schedule time range: e.g. "8 PM to 8 AM" or "20:00 to 08:00"
+	reTime := regexp.MustCompile(`(\d{1,2})(?::(\d{2}))?\s*(am|pm)\s*(?:to|until|-)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)`)
+	if m := reTime.FindStringSubmatch(lower); len(m) > 6 {
+		startH, _ := strconv.Atoi(m[1])
+		startM, _ := strconv.Atoi(m[2])
+		startMeridiem := m[3]
+		endH, _ := strconv.Atoi(m[4])
+		endM, _ := strconv.Atoi(m[5])
+		endMeridiem := m[6]
+
+		if startMeridiem == "pm" && startH < 12 {
+			startH += 12
+		} else if startMeridiem == "am" && startH == 12 {
+			startH = 0
+		}
+		if endMeridiem == "pm" && endH < 12 {
+			endH += 12
+		} else if endMeridiem == "am" && endH == 12 {
+			endH = 0
+		}
+
+		shutdownStart = fmt.Sprintf("%02d:%02d", startH, startM)
+		shutdownEnd = fmt.Sprintf("%02d:%02d", endH, endM)
+
+		dailyMins := (endH*60 + endM) - (startH*60 + startM)
+		if dailyMins <= 0 {
+			dailyMins += 24 * 60
+		}
+		dailyHours := float64(dailyMins) / 60.0
+
+		if strings.Contains(lower, "weekday") && !strings.Contains(lower, "weekend") {
+			params.DevShutdownHoursPerWeek = int(math.Round(dailyHours * 5))
+		} else {
+			params.DevShutdownHoursPerWeek = int(math.Round(dailyHours*5 + 48))
+			if params.DevShutdownHoursPerWeek > 168 {
+				params.DevShutdownHoursPerWeek = 168
+			}
+		}
+		params.DevOffHoursEnabled = params.DevShutdownHoursPerWeek > 0
+		tags = append(tags, fmt.Sprintf("Window: %s→%s (%.0fh/day)", shutdownStart, shutdownEnd, dailyHours))
+	} else {
+		// Hours per week check: e.g. "128 hrs/week" or "108 hours"
+		reHrs := regexp.MustCompile(`(\d{1,3})\s*(?:hrs?|hours?)(?:\s*/\s*wk|\s*per\s*week)?`)
+		if m := reHrs.FindStringSubmatch(lower); len(m) > 1 {
+			if v, err := strconv.Atoi(m[1]); err == nil && v >= 0 && v <= 168 {
+				params.DevShutdownHoursPerWeek = v
+				params.DevOffHoursEnabled = v > 0
+				tags = append(tags, fmt.Sprintf("Dev Shutdown: %dh/wk", v))
+			}
+		}
+	}
+
+	// Dev off-hours disabled check
+	if strings.Contains(lower, "24/7") || strings.Contains(lower, "no shutdown") || strings.Contains(lower, "disable dev") || strings.Contains(lower, "keep dev running") || strings.Contains(lower, "0 hrs") {
+		params.DevOffHoursEnabled = false
+		params.DevShutdownHoursPerWeek = 0
+		tags = append(tags, "Dev Off-Hours: Disabled")
+	}
+
+	// Staging weekend off detection
+	if strings.Contains(lower, "no weekend") || strings.Contains(lower, "disable staging") || strings.Contains(lower, "keep staging") {
+		params.StagingWeekendOffEnabled = false
+		params.StagingShutdownHoursPerWeek = 0
+		tags = append(tags, "Staging Weekend Halt: Off")
+	} else if strings.Contains(lower, "staging") || strings.Contains(lower, "weekend") {
+		params.StagingWeekendOffEnabled = true
+		params.StagingShutdownHoursPerWeek = 72
+		tags = append(tags, "Staging Weekend Halt: On (72h/wk)")
+	}
+
+	// Headroom extraction
+	reHeadroom := regexp.MustCompile(`(?i)(?:(\d{1,2})(?:\.\d+)?\s*%\s*(?:peak\s*)?(?:headroom|buffer|safety|margin)|(?:headroom|buffer|safety|margin)\s*(?:of|to|at|is)?\s*(\d{1,2})(?:\.\d+)?\s*%)`)
+	if m := reHeadroom.FindStringSubmatch(lower); len(m) > 0 {
+		valStr := m[1]
+		if valStr == "" && len(m) > 2 {
+			valStr = m[2]
+		}
+		if v, err := strconv.Atoi(valStr); err == nil {
+			if v < 10 {
+				v = 10
+			} else if v > 60 {
+				v = 60
 			}
 			params.SafetyHeadroomBufferPct = float64(v)
 			tags = append(tags, fmt.Sprintf("Peak Headroom: +%d%%", v))
 		}
-	} else if strings.Contains(lower, "aggressive") {
+	} else if strings.Contains(lower, "aggressive") || strings.Contains(lower, "max savings") || strings.Contains(lower, "maximum savings") {
 		params.SafetyHeadroomBufferPct = 15
 		params.PurgeOrphanedOlderThanDays = 15
+		params.DevShutdownHoursPerWeek = 128
 		tags = append(tags, "Profile: Aggressive (+15% Headroom)")
-	} else if strings.Contains(lower, "conservative") || strings.Contains(lower, "strict") {
+	} else if strings.Contains(lower, "conservative") || strings.Contains(lower, "ultra-safe") || strings.Contains(lower, "strict") || strings.Contains(lower, "zero risk") {
 		params.SafetyHeadroomBufferPct = 40
 		tags = append(tags, "Profile: Ultra-Conservative (+40% Headroom)")
 	}
 
+	// Orphan disk / IP cleanup days extraction
+	reOrphan := regexp.MustCompile(`(?i)(?:orphan\w*|volumes?|disks?|ips?).*?(\d{1,2})\s*days?|older\s+than\s+(\d{1,2})\s*days?`)
+	if m := reOrphan.FindStringSubmatch(lower); len(m) > 0 {
+		daysStr := m[1]
+		if daysStr == "" && len(m) > 2 {
+			daysStr = m[2]
+		}
+		if d, err := strconv.Atoi(daysStr); err == nil {
+			if d < 3 {
+				d = 3
+			} else if d > 60 {
+				d = 60
+			}
+			params.PurgeOrphanedOlderThanDays = d
+			tags = append(tags, fmt.Sprintf("Orphan Purge: >%dd", d))
+		}
+	}
+
 	if len(tags) == 0 {
-		tags = []string{"Dev Off-Hours: 118h/wk", fmt.Sprintf("Peak Headroom: +%.0f%%", params.SafetyHeadroomBufferPct)}
+		tags = []string{
+			fmt.Sprintf("Dev Off-Hours: %dh/wk", params.DevShutdownHoursPerWeek),
+			fmt.Sprintf("Peak Headroom: +%.0f%%", params.SafetyHeadroomBufferPct),
+			fmt.Sprintf("Orphan Purge: >%dd", params.PurgeOrphanedOlderThanDays),
+		}
 	}
 
 	return models.NLScenarioResponse{
@@ -227,13 +402,13 @@ func parseNLScenarioFallback(query string) models.NLScenarioResponse {
 		DetectedScope: models.NLScenarioScope{
 			Environment:   env,
 			Region:        region,
-			ShutdownStart: "20:00",
-			ShutdownEnd:   "08:00",
+			ShutdownStart: shutdownStart,
+			ShutdownEnd:   shutdownEnd,
 		},
 		ParsedTags: tags,
 		Explanation: fmt.Sprintf(
-			"Parsed scenario for %s: Dev off-hours %dh/wk, Staging weekend halt %v, Peak-Safety headroom +%.0f%%, Orphan purge >%dd.",
-			strings.ToUpper(region), params.DevShutdownHoursPerWeek, params.StagingWeekendOffEnabled, params.SafetyHeadroomBufferPct, params.PurgeOrphanedOlderThanDays,
+			"Parsed scenario for %s (%s): Dev off-hours %dh/wk (%s–%s), Staging weekend halt %v, Peak-Safety headroom +%.0f%%, Orphan purge >%dd.",
+			strings.ToUpper(region), strings.ToUpper(env), params.DevShutdownHoursPerWeek, shutdownStart, shutdownEnd, params.StagingWeekendOffEnabled, params.SafetyHeadroomBufferPct, params.PurgeOrphanedOlderThanDays,
 		),
 	}
 }

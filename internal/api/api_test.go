@@ -121,7 +121,7 @@ func TestGetResourceDetailAndAnalysis(t *testing.T) {
 func TestPatchAndBulkRecommendations(t *testing.T) {
 	handler := setupTestServer()
 
-	// 1. Get initial recommendations
+	// 1. Get initial recommendations - verify 0 accepted on load
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/recommendations", nil)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
@@ -131,11 +131,20 @@ func TestPatchAndBulkRecommendations(t *testing.T) {
 	if len(initial.Items) == 0 {
 		t.Fatal("expected recommendations items")
 	}
+	if initial.Summary.AcceptedCount != 0 {
+		t.Fatalf("expected 0 initial accepted recommendations, got %d", initial.Summary.AcceptedCount)
+	}
+	if initial.Summary.AcceptedSavingsINR != 0 {
+		t.Fatalf("expected 0 initial accepted savings INR, got %f", initial.Summary.AcceptedSavingsINR)
+	}
+	if initial.Summary.PendingCount != len(initial.Items) {
+		t.Fatalf("expected all %d recommendations to be pending, got %d", len(initial.Items), initial.Summary.PendingCount)
+	}
 
 	firstID := initial.Items[0].ID
 
-	// 2. Patch single
-	patchBody := []byte(`{"status":"rejected"}`)
+	// 2. Patch single item to accepted
+	patchBody := []byte(`{"status":"accepted"}`)
 	patchReq := httptest.NewRequest(http.MethodPatch, "/api/v1/recommendations/"+firstID, bytes.NewBuffer(patchBody))
 	patchReq.Header.Set("Content-Type", "application/json")
 	patchRec := httptest.NewRecorder()
@@ -148,12 +157,16 @@ func TestPatchAndBulkRecommendations(t *testing.T) {
 	var patchedResp models.RecommendationsResponse
 	_ = json.NewDecoder(patchRec.Body).Decode(&patchedResp)
 
+	if patchedResp.Summary.AcceptedCount != 1 {
+		t.Fatalf("expected 1 accepted recommendation after patch, got %d", patchedResp.Summary.AcceptedCount)
+	}
+
 	found := false
 	for _, it := range patchedResp.Items {
 		if it.ID == firstID {
 			found = true
-			if it.Status != "rejected" {
-				t.Fatalf("expected status 'rejected', got %s", it.Status)
+			if it.Status != "accepted" {
+				t.Fatalf("expected status 'accepted', got %s", it.Status)
 			}
 		}
 	}
@@ -176,6 +189,26 @@ func TestPatchAndBulkRecommendations(t *testing.T) {
 	_ = json.NewDecoder(bulkRec.Body).Decode(&bulkResp)
 	if bulkResp.Summary.AcceptedCount == 0 {
 		t.Fatal("expected accepted items after bulk accept")
+	}
+
+	// 4. Bulk revert to pending
+	revertBody := []byte(`{"status":"pending","filter_risk":"ALL"}`)
+	revertReq := httptest.NewRequest(http.MethodPost, "/api/v1/recommendations/bulk", bytes.NewBuffer(revertBody))
+	revertReq.Header.Set("Content-Type", "application/json")
+	revertRec := httptest.NewRecorder()
+	handler.ServeHTTP(revertRec, revertReq)
+
+	if revertRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK on bulk revert to pending, got %d", revertRec.Code)
+	}
+
+	var revertResp models.RecommendationsResponse
+	_ = json.NewDecoder(revertRec.Body).Decode(&revertResp)
+	if revertResp.Summary.AcceptedCount != 0 {
+		t.Fatalf("expected 0 accepted items after bulk revert to pending, got %d", revertResp.Summary.AcceptedCount)
+	}
+	if revertResp.Summary.PendingCount != len(revertResp.Items) {
+		t.Fatalf("expected all %d items to be pending, got %d", len(revertResp.Items), revertResp.Summary.PendingCount)
 	}
 }
 

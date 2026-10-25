@@ -329,7 +329,7 @@ type UpdateRecommendationRequest struct {
 
 // BulkUpdateRequest is the payload for POST /api/v1/recommendations/bulk.
 type BulkUpdateRequest struct {
-	Status     string `json:"status"`      // "accepted", "rejected"
+	Status     string `json:"status"`      // "accepted", "rejected", "pending"
 	FilterRisk string `json:"filter_risk"` // "ALL", "LOW_ONLY"
 }
 

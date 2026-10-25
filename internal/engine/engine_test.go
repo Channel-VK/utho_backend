@@ -170,3 +170,35 @@ func TestPricingTiers(t *testing.T) {
 		t.Fatalf("incorrect plan data for c2.small: %+v", pSmall)
 	}
 }
+
+func TestRecommendationsInitialStatus(t *testing.T) {
+	resources := seed.GenerateDataset()
+	recs := engine.GenerateRecommendations(resources, 25.0)
+
+	if len(recs) == 0 {
+		t.Fatal("expected recommendations to be generated")
+	}
+
+	for _, r := range recs {
+		if r.Status != "pending" {
+			t.Fatalf("expected all recommendations to initialize as 'pending', got %s for rec %s (%s)", r.Status, r.ID, r.ResourceName)
+		}
+	}
+
+	summary := engine.ComputeSummary(recs)
+	if summary.AcceptedCount != 0 {
+		t.Fatalf("expected 0 initial accepted count, got %d", summary.AcceptedCount)
+	}
+	if summary.AcceptedSavingsINR != 0 {
+		t.Fatalf("expected 0 initial accepted savings INR, got %f", summary.AcceptedSavingsINR)
+	}
+	if summary.RejectedCount != 0 {
+		t.Fatalf("expected 0 initial rejected count, got %d", summary.RejectedCount)
+	}
+	if summary.PendingCount != len(recs) {
+		t.Fatalf("expected pending count to equal total recommendations (%d), got %d", len(recs), summary.PendingCount)
+	}
+	if summary.AcceptedSavingsPct != 0.0 {
+		t.Fatalf("expected 0.0 accepted savings pct, got %f", summary.AcceptedSavingsPct)
+	}
+}

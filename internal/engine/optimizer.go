@@ -76,9 +76,6 @@ func EvaluateResource(res models.Resource, headroomBufferPct float64, counter in
 			}
 
 			status := "pending"
-			if res.Name == "prod-OrderWorker-03" || counter <= 5 {
-				status = "accepted"
-			}
 
 			return &models.Recommendation{
 				ID:                  recID,
@@ -144,9 +141,6 @@ func EvaluateResource(res models.Resource, headroomBufferPct float64, counter in
 		projCost := round2(currentPlan.MonthlyRateINR - savings)
 
 		status := "pending"
-		if counter%3 == 0 {
-			status = "accepted"
-		}
 
 		return &models.Recommendation{
 			ID:                  recID,
@@ -199,7 +193,7 @@ func EvaluateResource(res models.Resource, headroomBufferPct float64, counter in
 			Reason:              "Resource created >90 days ago with p99 CPU < 3.5% and net egress < 0.5 Mbps for 30 consecutive days. Safe to snapshot disk and terminate.",
 			RiskLevel:           "LOW",
 			ConfidenceScore:     98,
-			Status:              "accepted",
+			Status:              "pending",
 		}
 	}
 
@@ -224,7 +218,7 @@ func EvaluateResource(res models.Resource, headroomBufferPct float64, counter in
 			Reason:              fmt.Sprintf("Block volume (%d GB) unattached for >30 days with zero read/write IOPS. Incurring unnecessary storage spend.", res.DiskGB),
 			RiskLevel:           "LOW",
 			ConfidenceScore:     99,
-			Status:              "accepted",
+			Status:              "pending",
 		}
 	}
 
@@ -249,7 +243,7 @@ func EvaluateResource(res models.Resource, headroomBufferPct float64, counter in
 			Reason:              "Public IPv4 address is not assigned to any network interface or VM, incurring idle reservation charges.",
 			RiskLevel:           "LOW",
 			ConfidenceScore:     99,
-			Status:              "accepted",
+			Status:              "pending",
 		}
 	}
 
