@@ -1,6 +1,6 @@
-# SmartCloud Optimizer - Go Backend API (Utho Cloud FinOps)
+# FinSort - Go Backend API (Utho Cloud FinOps)
 
-SmartCloud Optimizer is a peak-safe, deterministic FinOps and cloud resource rightsizing backend engine for companies running infrastructure across **Utho Cloud** regions (`in-noida-1`, `in-bangalore-1`, `in-mumbai-1`) split across `prod`, `staging`, and `dev` environments.
+FinSort is a peak-safe, deterministic FinOps and cloud resource rightsizing backend engine for companies running infrastructure across **Utho Cloud** regions (`in-noida-1`, `in-bangalore-1`, `in-mumbai-1`) split across `prod`, `staging`, and `dev` environments.
 
 Over 6 months, cloud spend rose 40% (from ₹4,85,000/mo to ₹6,79,000/mo). This platform converts 30 days of raw hourly utilization metrics across 85 resources into peak-safe (`p95`/`p99`), mathematically sound, actionable engineering decisions.
 
@@ -20,7 +20,7 @@ Over 6 months, cloud spend rose 40% (from ₹4,85,000/mo to ₹6,79,000/mo). Thi
 ## 📁 Project Directory Structure
 
 ```text
-smartcloud-backend/
+finsort-backend/
 ├── go.mod
 ├── README.md
 ├── main.go                       # Root runner entrypoint
@@ -70,7 +70,7 @@ The server binds to `http://localhost:8080`.
 
 ```bash
 curl http://localhost:8080/healthz
-# Response: {"status":"ok","service":"smartcloud-optimizer-backend"}
+# Response: {"status":"ok","service":"finsort-backend"}
 ```
 
 ### 3. Run Test Suite

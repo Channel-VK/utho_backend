@@ -82,7 +82,7 @@ func (s *Store) HandleGetStatus(w http.ResponseWriter, r *http.Request) {
 		GoEnginePort:      8080,
 		AIEngineConnected: aiConnected,
 		AIEnginePort:      8001,
-		AIEngineService:   "smartcloud-ai-engine",
+		AIEngineService:   "finsort-ai-engine",
 		AIFeatures:        features,
 	}
 	writeJSON(w, http.StatusOK, status)

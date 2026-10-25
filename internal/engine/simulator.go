@@ -211,7 +211,7 @@ func GenerateRemediation(recs []models.Recommendation) models.RemediationExport 
 	var cliBuilder strings.Builder
 	cliBuilder.WriteString("#!/usr/bin/env bash\n")
 	cliBuilder.WriteString("# ==============================================================================\n")
-	cliBuilder.WriteString("# SMARTCLOUD OPTIMIZER - AUTOMATED REMEDIATION RUNBOOK (UTHO CLOUD)\n")
+	cliBuilder.WriteString("# FINSORT - AUTOMATED REMEDIATION RUNBOOK (UTHO CLOUD)\n")
 	cliBuilder.WriteString(fmt.Sprintf("# Generated at: %s\n", timestamp))
 	cliBuilder.WriteString(fmt.Sprintf("# Total Actions: %d Accepted FinOps Remediations\n", len(accepted)))
 	cliBuilder.WriteString("# ==============================================================================\n\n")
@@ -222,7 +222,7 @@ func GenerateRemediation(recs []models.Recommendation) models.RemediationExport 
 	// 2. Terraform HCL Snippet
 	var hclBuilder strings.Builder
 	hclBuilder.WriteString("# ==============================================================================\n")
-	hclBuilder.WriteString("# SMARTCLOUD OPTIMIZER - TERRAFORM HCL RECONFIGURATIONS\n")
+	hclBuilder.WriteString("# FINSORT - TERRAFORM HCL RECONFIGURATIONS\n")
 	hclBuilder.WriteString(fmt.Sprintf("# Generated at: %s\n", timestamp))
 	hclBuilder.WriteString("# Provider: uthocloud/utho\n")
 	hclBuilder.WriteString("# ==============================================================================\n\n")

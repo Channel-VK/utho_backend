@@ -38,7 +38,7 @@ func main() {
 	}
 
 	fmt.Println("=================================================================")
-	fmt.Println("🚀 SMARTCLOUD OPTIMIZER - UTHO CLOUD FINOPS BACKEND API")
+	fmt.Println("🚀 FINSORT - UTHO CLOUD FINOPS BACKEND API")
 	fmt.Println("=================================================================")
 	fmt.Println("⚙️  Initializing In-Memory Store & Deterministic Seed (Seed 42)...")
 
@@ -50,7 +50,7 @@ func main() {
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"status":"ok","service":"smartcloud-optimizer-backend"}`))
+		_, _ = w.Write([]byte(`{"status":"ok","service":"finsort-backend"}`))
 	})
 
 	// Register all FinOps API routes
@@ -69,7 +69,7 @@ func main() {
 	// Server run context
 	serverErrors := make(chan error, 1)
 	go func() {
-		log.Printf("✨ SmartCloud Optimizer Backend listening on http://localhost:%s\n", port)
+		log.Printf("✨ FinSort FinOps Backend listening on http://localhost:%s\n", port)
 		log.Printf("📡 Full Permissive CORS Enabled for React Frontend (:5173)\n")
 		log.Printf("🤖 Python AI Bridge configured for %s\n", os.Getenv("PYTHON_AI_URL"))
 		if os.Getenv("PYTHON_AI_URL") == "" {

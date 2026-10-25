@@ -541,28 +541,198 @@ func (c *Client) Chat(req models.ChatRequest) models.ChatResponse {
 		convID = "conv-deterministic-session"
 	}
 	lower := strings.ToLower(req.Message)
-	answer := "SmartCloud FinOps Engine: Actively monitoring 85 Utho Cloud resources across Mumbai, Bangalore, and Noida. 20 compute workloads are eligible for peak-safe rightsizing saving ₹1,50,310/mo, while 10 bursty VMs are protected by the Peak-Safety Governor. You can ask about rightsizing, cost forecasting, what-if shutdown scenarios, or specific instance metrics."
+	answer := "FinSort FinOps Engine: Actively monitoring 85 Utho Cloud nodes across Mumbai, Bangalore, and Noida. Baseline spend is ₹6,83,200/mo with ₹1,50,310/mo accepted savings (-22.0%) and ₹2,77,230/mo total potential. You can ask about our 40% bill growth audit, top rightsizing candidates with p99 peak protection, active alerts (ALT-001 OOM risk), orphaned volumes/IPs, or What-If shutdown simulations."
 	tool := "dashboard_summary"
+	var dataMap any = map[string]any{
+		"total_nodes":                  85,
+		"current_monthly_spend_inr":    683200,
+		"accepted_monthly_savings_inr": 150310,
+		"total_potential_savings_inr":  277230,
+		"active_critical_alerts":       3,
+		"peak_safety_standard":         "p99 < 85%",
+	}
 
-	if strings.Contains(lower, "rightsiz") || strings.Contains(lower, "downsize") || strings.Contains(lower, "save") {
-		answer = "Identified 20 rightsizing candidates saving ₹1,50,310/mo. Top candidate: prod-search-indexer-04 (m8.2xlarge → m8.xlarge) saving ₹9,600/mo under verified p95/p99 peak headroom ceilings."
+	if strings.Contains(lower, "40%") || strings.Contains(lower, "grow") || strings.Contains(lower, "bill") || strings.Contains(lower, "quiet tax") || strings.Contains(lower, "saas") {
+		answer = "FinSort Root-Cause Diagnosis (40% SaaS Cloud Bill Growth):\n\nLeadership's 40% cost increase stems from three quiet taxes across the 85-node fleet:\n1. Over-Provisioned Compute (₹1,50,310/mo waste): 20 VMs sized for worst-day peaks with CPU averaging <18% outside 30-minute spikes.\n2. Non-Prod Off-Hours Bleed (₹78,400/mo waste): 28 staging and dev instances running 24/7 through weekends and overnight hours (118 idle hrs/wk per node).\n3. Orphaned Infrastructure (₹48,520/mo waste): 14 unattached NVMe block volumes and 6 unmapped elastic IPv4 addresses outliving creator projects.\n\nApplying FinSort peak-safe recommendations safely cuts monthly spend from ₹6,83,200 to ₹5,32,890 (-22.0% immediate accepted run-rate)."
+		tool = "financial_growth_audit"
+		dataMap = map[string]any{
+			"baseline_monthly_spend_inr":        683200,
+			"projected_optimized_spend_inr":     532890,
+			"accepted_monthly_savings_inr":      150310,
+			"overprovisioned_compute_waste_inr": 150310,
+			"off_hours_idle_waste_inr":          78400,
+			"orphaned_assets_waste_inr":         48520,
+		}
+	} else if strings.Contains(lower, "alt-001") || strings.Contains(lower, "oom") || strings.Contains(lower, "heap") || strings.Contains(lower, "search-indexer") {
+		answer = "ALT-001 Telemetry & Root-Cause Analysis (prod-search-indexer-04 in in-mumbai-1):\n• Workload: Production Elasticsearch/Lucene indexer (res-vm-015, m8.2xlarge, 32 GB RAM).\n• Symptom: Linear memory creep of +1.8% RAM/hr without GC recovery (currently 89.4%).\n• Time-to-Failure (TTF): ~6.6 to 14.0 hours before Linux OOM killer panic.\n• Root Cause: Unbounded Lucene query cache leak aggravated by unindexed customer search facets.\n• Remediation: Automated rolling pod restart staged, JVM max heap ceiling set to 12 GB (-Xmx12g), and host downsized to m8.xlarge saving ₹9,600/mo once patched."
+		tool = "anomaly_telemetry"
+		dataMap = map[string]any{
+			"alert_id":              "ALT-001",
+			"resource_id":           "res-vm-015",
+			"resource_name":         "prod-search-indexer-04",
+			"region":                "in-mumbai-1",
+			"time_to_failure_hours": 6.6,
+			"current_memory_pct":    89.4,
+			"root_cause":            "JVM Lucene search filter cache leak",
+			"potential_savings_inr": 9600,
+		}
+	} else if strings.Contains(lower, "alt-002") || strings.Contains(lower, "loadtest") {
+		answer = "ALT-002 Anomaly Analysis (staging-loadtest-cluster in in-bangalore-1):\n• Workload: 8 staging VMs running continuously at 0% load since Friday 18:00 IST.\n• Cost Bleed: ₹2,986/day in unutilized capacity.\n• Root Cause: Automated regression suite left worker nodes up after load test completion.\n• Remediation: Auto-pause loadtest nodes via FinSort policy; enroll in Bangalore off-hours hibernation."
+		tool = "anomaly_telemetry"
+		dataMap = map[string]any{
+			"alert_id":        "ALT-002",
+			"cluster":         "staging-loadtest-cluster",
+			"region":          "in-bangalore-1",
+			"daily_bleed_inr": 2986,
+			"status":          "Idle 0% CPU since Friday 18:00 IST",
+		}
+	} else if strings.Contains(lower, "alt-003") || strings.Contains(lower, "wal") || strings.Contains(lower, "postgres") {
+		answer = "ALT-003 Disk Exhaustion Analysis (prod-postgres-wal-volume in in-noida-1):\n• Workload: PostgreSQL WAL replication disk (res-vol-022, 500 GB NVMe).\n• Telemetry: Disk space at 88.4% capacity, growing +3.2 GB/day.\n• Time-to-Failure (TTF): 9.8 days until disk full panic puts primary PostgreSQL into read-only recovery.\n• Root Cause: Stale replication slot on standby node blocking WAL recycling.\n• Remediation: Drop inactive replication slot, expand disk by 100 GB via Utho API, and enable WAL compression."
+		tool = "anomaly_telemetry"
+		dataMap = map[string]any{
+			"alert_id":             "ALT-003",
+			"volume_id":            "res-vol-022",
+			"region":               "in-noida-1",
+			"time_to_failure_days": 9.8,
+			"utilization_pct":      88.4,
+		}
+	} else if strings.Contains(lower, "rightsiz") || strings.Contains(lower, "downsize") || strings.Contains(lower, "candidate") || strings.Contains(lower, "p99") || strings.Contains(lower, "top 3") {
+		answer = "FinSort Top Rightsizing Candidates (Enforcing p99 < 85% Peak Safety):\n\n1. prod-search-indexer-04 (res-vm-015 · in-mumbai-1):\n   • m8.2xlarge → m8.xlarge | Saves ₹9,600/mo (-38.7%) | Projected p99 CPU: 68.2%\n2. dev-api-gateway-02 (res-vm-003 · in-bangalore-1):\n   • c4.large → c4.medium | Saves ₹4,200/mo (-45.7%) | Projected p99 CPU: 42.1%\n3. staging-worker-08 (res-vm-027 · in-noida-1):\n   • m4.xlarge → m4.large | Saves ₹3,800/mo (-44.2%) | Projected p99 CPU: 51.4%\n\nTotal rightsizing pipeline includes 20 candidates yielding ₹1,50,310/mo in recurring savings without SLA risk."
 		tool = "rightsizing"
-	} else if strings.Contains(lower, "what if") || strings.Contains(lower, "shut down") || strings.Contains(lower, "schedule") {
-		answer = "What-If Simulation: Halting non-production dev/staging boxes during off-peak hours (8 PM - 8 AM IST and weekends) cuts waste by 118 hrs/wk, projecting up to ₹82,200/mo in net runway gains."
+		dataMap = map[string]any{
+			"total_rightsizing_candidates": 20,
+			"total_monthly_savings_inr":    150310,
+			"peak_safety_ceiling":          "p99 < 85%",
+			"top_candidates": []map[string]any{
+				{"resource_id": "res-vm-015", "name": "prod-search-indexer-04", "plan": "m8.2xlarge → m8.xlarge", "savings_inr": 9600, "projected_p99_cpu": "68.2%"},
+				{"resource_id": "res-vm-003", "name": "dev-api-gateway-02", "plan": "c4.large → c4.medium", "savings_inr": 4200, "projected_p99_cpu": "42.1%"},
+				{"resource_id": "res-vm-027", "name": "staging-worker-08", "plan": "m4.xlarge → m4.large", "savings_inr": 3800, "projected_p99_cpu": "51.4%"},
+			},
+		}
+	} else if strings.Contains(lower, "orphan") || strings.Contains(lower, "unattached") || strings.Contains(lower, "disk") || strings.Contains(lower, "volume") || strings.Contains(lower, "unused ip") {
+		answer = "FinSort Orphaned Asset Audit (Utho Cloud Fleet):\n• Unattached NVMe Volumes: 14 volumes (2,400 GB total) unmounted >30 days costing ₹38,400/mo with zero I/O.\n• Unused Public IPs: 6 elastic IPs unallocated to any active VM costing ₹10,120/mo.\n• Total Orphaned Waste: ₹48,520/mo.\n• Action: One-click safe cleanup generates Terraform destroy code and Utho CLI purge commands after taking automated point-in-time snapshots."
+		tool = "orphaned_inventory"
+		dataMap = map[string]any{
+			"unattached_nvme_volumes":     14,
+			"unattached_volume_spend_inr": 38400,
+			"unused_elastic_ips":          6,
+			"unused_ip_spend_inr":         10120,
+			"total_orphaned_waste_inr":    48520,
+		}
+	} else if strings.Contains(lower, "what if") || strings.Contains(lower, "hibernate") || strings.Contains(lower, "shut down") || strings.Contains(lower, "schedule") || strings.Contains(lower, "off-hours") {
+		answer = "FinSort What-If Policy Simulation (Bangalore & Noida Non-Prod Workloads):\n• Policy: Automated hibernation from 8:00 PM to 8:00 AM IST on weekdays and 24 hours on weekends.\n• Scope: 28 non-production instances (16 in Bangalore, 12 in Noida).\n• Run-Time Reclaimed: 118 idle hours per node each week.\n• Monthly Savings: ₹78,400 to ₹82,200/mo in recurring cloud bill savings.\n• Peak Safety: All production VMs in Mumbai remain 100% online under the Peak-Safety Governor."
 		tool = "what_if"
-	} else if strings.Contains(lower, "forecast") || strings.Contains(lower, "cost") {
-		answer = "Multi-Horizon Cost Forecast: 30-day projected spend under recommended plans drops from ₹6,83,200 to ₹5,32,890 (-22.0%), locking in ₹1,50,310 in recurring monthly savings."
-		tool = "cost_forecast"
-	} else if strings.Contains(lower, "alert") || strings.Contains(lower, "incident") || strings.Contains(lower, "ttf") {
-		answer = "Active Telemetry Incidents: ALT-001 (search indexer heap leak, TTF ~14.0h), ALT-002 (orphaned staging test cluster), and ALT-003 (PostgreSQL WAL volume growth, TTF ~9.8d). Mitigations are staged."
-		tool = "alerts"
+		dataMap = map[string]any{
+			"simulated_monthly_savings_inr": 78400,
+			"reclaimed_hours_per_week":      118,
+			"affected_non_prod_vms":         28,
+			"headroom_safety_pct":           25,
+		}
+	} else if strings.Contains(lower, "res-vm-015") || strings.Contains(lower, "prod-search-indexer") {
+		answer = "FinSort SRE Resource Inspection: prod-search-indexer-04 (res-vm-015 · in-mumbai-1)\n• Workload: Production Elasticsearch & Lucene search cluster (Search & Catalog team).\n• Current Plan: m8.2xlarge (8 vCPU / 32 GB RAM / 100 GB NVMe) @ ₹24,800/mo.\n• Recommended Plan: m8.xlarge (4 vCPU / 16 GB RAM) @ ₹15,200/mo.\n• Monthly Savings: ₹9,600/mo (-38.7%).\n• Telemetry: CPU p50: 18.4%, p95: 58.2%, p99: 68.2% (safely below 85% governor ceiling).\n• Active Incident (ALT-001): Linear memory creep of +1.8% RAM/hr without GC recovery (currently 89.4%). Time-to-Failure (TTF): ~6.6 to 14.0 hours until Linux OOM killer panic.\n• Root Cause: Unbounded Lucene filter cache leak aggravated by unindexed customer query facets.\n• Remediation: Staged rolling pod restart, JVM ceiling set to -Xmx12g, and host downsized to m8.xlarge once leak is resolved."
+		tool = "resource_telemetry"
+		dataMap = map[string]any{
+			"resource_id":           "res-vm-015",
+			"name":                  "prod-search-indexer-04",
+			"region":                "in-mumbai-1",
+			"environment":           "prod",
+			"current_plan":          "m8.2xlarge",
+			"recommended_plan":      "m8.xlarge",
+			"current_spend_inr":     24800,
+			"monthly_savings_inr":   9600,
+			"projected_p99_cpu":     "68.2%",
+			"active_alert":          "ALT-001 (JVM Heap Leak)",
+			"time_to_failure_hours": 6.6,
+		}
+	} else if strings.Contains(lower, "res-vm-003") || strings.Contains(lower, "dev-api-gateway") {
+		answer = "FinSort SRE Resource Inspection: dev-api-gateway-02 (res-vm-003 · in-bangalore-1)\n• Workload: Development API Gateway & Mock Proxy (Core API team).\n• Current Plan: c4.large (4 vCPU / 8 GB RAM) @ ₹9,200/mo.\n• Recommended Plan: c4.medium (2 vCPU / 4 GB RAM) @ ₹5,000/mo.\n• Monthly Savings: ₹4,200/mo (-45.7%).\n• Telemetry: CPU p50: 8.4%, p95: 32.1%, p99: 42.1%. Memory p95: 38.0%.\n• Opportunity: Workload is idle on weekends and overnight (20:00 to 08:00 IST). Enrolling in Bangalore off-hours hibernation saves an additional ₹1,800/mo."
+		tool = "resource_telemetry"
+		dataMap = map[string]any{
+			"resource_id":         "res-vm-003",
+			"name":                "dev-api-gateway-02",
+			"region":              "in-bangalore-1",
+			"environment":         "dev",
+			"current_plan":        "c4.large",
+			"recommended_plan":    "c4.medium",
+			"current_spend_inr":   9200,
+			"monthly_savings_inr": 4200,
+			"projected_p99_cpu":   "42.1%",
+			"status":              "ACTIONABLE_RIGHTSIZE",
+		}
+	} else if strings.Contains(lower, "res-vm-027") || strings.Contains(lower, "staging-worker") {
+		answer = "FinSort SRE Resource Inspection: staging-worker-08 (res-vm-027 · in-noida-1)\n• Workload: Staging Background Job Worker (Logistics team).\n• Current Plan: m4.xlarge (4 vCPU / 16 GB RAM) @ ₹8,600/mo.\n• Recommended Plan: m4.large (2 vCPU / 8 GB RAM) @ ₹4,800/mo.\n• Monthly Savings: ₹3,800/mo (-44.2%).\n• Telemetry: CPU p50: 12.1%, p95: 41.5%, p99: 51.4% (well within 25% safety headroom).\n• Status: Actionable rightsize candidate with zero SLA risk."
+		tool = "resource_telemetry"
+		dataMap = map[string]any{
+			"resource_id":         "res-vm-027",
+			"name":                "staging-worker-08",
+			"region":              "in-noida-1",
+			"environment":         "staging",
+			"current_plan":        "m4.xlarge",
+			"recommended_plan":    "m4.large",
+			"current_spend_inr":   8600,
+			"monthly_savings_inr": 3800,
+			"projected_p99_cpu":   "51.4%",
+			"status":              "ACTIONABLE_RIGHTSIZE",
+		}
+	} else if strings.Contains(lower, "vm-utho-0912") || strings.Contains(lower, "prod-postgres-primary") {
+		answer = "FinSort Peak-Safety Inspection: prod-postgres-primary (vm-utho-0912 · in-noida-1)\n• Workload: Primary Transactional Database (Platform DB team).\n• Current Plan: 16 vCPU / 64 GB RAM / 500 GB NVMe @ ₹32,000/mo.\n• Optimization Status: PROTECTED_PEAK_LOAD (Do NOT Downsize).\n• SRE Governor Rationale: Naive average CPU is only 17.8%, but p99 surges to 89.4% during 20:00-22:00 IST peak checkout batches. Downsizing is strictly blocked by FinSort's peak-safety governor to prevent database queuing timeouts and revenue-impacting SLA failures."
+		tool = "peak_safety_telemetry"
+		dataMap = map[string]any{
+			"resource_id":         "vm-utho-0912",
+			"name":                "prod-postgres-primary",
+			"region":              "in-noida-1",
+			"environment":         "prod",
+			"optimization_status": "PROTECTED_PEAK_LOAD",
+			"average_cpu_pct":     17.8,
+			"peak_cpu_p99":        89.4,
+			"governor_action":     "Downsizing Blocked (Peak SLA Protection)",
+		}
+	} else if strings.Contains(lower, "idle") || strings.Contains(lower, "zombie") || strings.Contains(lower, "unutilized") {
+		answer = "FinSort Idle & Zombie Workload Audit (Utho Cloud Fleet):\n• 5 Zombie VMs: Operating >30 days with average CPU <2.0% and network I/O <0.5 Mbps across Noida and Bangalore, costing ₹18,400/mo.\n• Staging Idle Cluster: 8 staging worker instances left running at 0% load since Friday 18:00 IST (ALT-002), bleeding ₹2,986/day.\n• Total Idle Waste: ₹32,600/mo in unutilized compute.\n• Action: Flagged for automated snapshot followed by graceful decommission or enrollment in scheduled off-hours shutdown."
+		tool = "zombie_inventory"
+		dataMap = map[string]any{
+			"zombie_instances_count":     5,
+			"zombie_monthly_bleed_inr":   18400,
+			"staging_idle_bleed_day_inr": 2986,
+			"total_idle_waste_inr":       32600,
+			"recommended_action":         "Snapshot and terminate zombie instances",
+		}
+	} else if strings.Contains(lower, "environment") || strings.Contains(lower, "prod") || strings.Contains(lower, "staging") || strings.Contains(lower, "dev") {
+		answer = "FinSort Environment Spend & Node Distribution (85 Nodes):\n• Production: 45 nodes · ₹4,62,500/mo (67.7% of bill) · High peak-safety governor active (p99 < 85%).\n• Staging: 24 nodes · ₹1,38,500/mo (20.3% of bill) · Candidate for nightly and weekend off-hours pauses.\n• Development: 16 nodes · ₹82,200/mo (12.0% of bill) · Primary target for 8 PM - 8 AM scheduled hibernation."
+		tool = "environment_telemetry"
+		dataMap = map[string]any{
+			"prod_spend_inr":          462500,
+			"staging_spend_inr":       138500,
+			"dev_spend_inr":           82200,
+			"total_monthly_spend_inr": 683200,
+		}
+	} else if strings.Contains(lower, "sustainab") || strings.Contains(lower, "carbon") || strings.Contains(lower, "co2") || strings.Contains(lower, "green") || strings.Contains(lower, "kwh") {
+		answer = "FinSort GreenOps & Sustainability Audit:\n• Energy Reduction: 7,816 kWh / month saved across the 85-node fleet through rightsizing and dev off-hours shutdown.\n• Carbon Reduction: ~5,550 kg CO2e / month avoided, based on India Central Electricity Authority grid factor (0.71 kg CO2e / kWh) and PUE 1.4.\n• Equivalent Impact: Equivalent to planting 252 mature trees annually or removing 14 passenger vehicles from the road."
+		tool = "sustainability"
+		dataMap = map[string]any{
+			"monthly_energy_saved_kwh":     7816,
+			"monthly_carbon_saved_kg_co2e": 5550,
+			"equivalent_trees_planted":     252,
+			"india_cea_grid_factor":        "0.71 kg/kWh",
+			"datacenter_pue":               1.4,
+		}
+	} else if strings.Contains(lower, "terraform") || strings.Contains(lower, "iac") || strings.Contains(lower, "hcl") || strings.Contains(lower, "tf") || strings.Contains(lower, "remediation") {
+		answer = "FinSort Automated Remediation & Terraform Export:\n• 1-Click Code Generation: Generates production-ready Terraform HCL and Utho CLI shell scripts for all approved recommendations.\n• Safety Precautions: Automated point-in-time snapshot commands are prepended before any instance resize or volume purge.\n• Rollback Ready: Every script includes an instant rollback command (<90s recovery).\n• Tags: Resources are tagged with ManagedBy = 'FinSort-FinOps' and FinOpsStatus = 'Optimized'."
+		tool = "remediation_export"
+		dataMap = map[string]any{
+			"iac_provider":               "Terraform + Utho CLI",
+			"snapshot_verification":      "Automated Pre-Execution Snapshot",
+			"rollback_recovery_time_sec": 90,
+			"management_tag":             "ManagedBy = FinSort-FinOps",
+		}
 	}
 
 	return models.ChatResponse{
 		ConversationID: convID,
 		Answer:         answer,
 		Tool:           tool,
-		Model:          "Deterministic-SRE-Fallback",
+		Data:           dataMap,
+		Model:          "FinSort-FinOps-Engine (Deterministic SRE Gateway)",
 	}
 }
 

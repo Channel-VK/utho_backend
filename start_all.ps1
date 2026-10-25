@@ -1,9 +1,9 @@
 <#
 .SYNOPSIS
-    SmartCloud Optimizer - Unified 3-Service Launcher
+    FinSort - Unified 3-Service Launcher
     Starts:
       1. Python AI Service (:8001)  [FastAPI + Uvicorn]
-      2. Go FinOps Backend (:8080)  [smartcloud_server.exe]
+      2. Go FinOps Backend (:8080)  [finsort_server.exe]
       3. React Frontend (:5173)     [Vite Dev Server]
 #>
 
@@ -16,7 +16,7 @@ $BackendDir  = "c:\Users\Vishak Krishnan\GolandProjects\utho_backend"
 $FrontendDir = "c:\Users\Vishak Krishnan\GolandProjects\utho_frontend"
 
 Write-Host "==========================================================" -ForegroundColor Cyan
-Write-Host "  SmartCloud Optimizer - Unified FinOps & AI Platform" -ForegroundColor Cyan
+Write-Host "  FinSort - Unified FinOps & SRE Platform" -ForegroundColor Cyan
 Write-Host "==========================================================" -ForegroundColor Cyan
 
 # Helper to free ports if already bound
@@ -47,10 +47,10 @@ Start-Process -FilePath $PythonExe `
 # 2. Build & Start Go FinOps Backend (:8080)
 Write-Host "[2/3] Starting Go FinOps Backend on http://127.0.0.1:8080 ..." -ForegroundColor Green
 Push-Location $BackendDir
-& $GoExe build -o smartcloud_server.exe .\cmd\server
+& $GoExe build -o finsort_server.exe .\cmd\server
 $env:PORT = "8080"
 $env:PYTHON_AI_URL = "http://127.0.0.1:8001"
-Start-Process -FilePath "$BackendDir\smartcloud_server.exe" `
+Start-Process -FilePath "$BackendDir\finsort_server.exe" `
     -WorkingDirectory $BackendDir `
     -NoNewWindow
 Pop-Location

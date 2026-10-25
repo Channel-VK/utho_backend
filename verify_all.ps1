@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    SmartCloud Optimizer - End-to-End 3-Service Verification Suite
+    FinSort - End-to-End 3-Service Verification Suite
     Verifies:
       1. Python AI Service (:8001) Health, Direct AI Endpoints & <50ms Cache Speed
       2. Go FinOps Backend (:8080) Core Routes + Unified /api/v1/ai/* Gateway Routes
@@ -16,7 +16,7 @@ $BackendDir  = "c:\Users\Vishak Krishnan\GolandProjects\utho_backend"
 $FrontendDir = "c:\Users\Vishak Krishnan\GolandProjects\utho_frontend"
 
 Write-Host "==========================================================" -ForegroundColor Cyan
-Write-Host "  SmartCloud Optimizer - End-to-End Verification Suite" -ForegroundColor Cyan
+Write-Host "  FinSort - End-to-End Verification Suite" -ForegroundColor Cyan
 Write-Host "==========================================================" -ForegroundColor Cyan
 
 $spawnedProcs = @()
@@ -24,7 +24,7 @@ $spawnedProcs = @()
 try {
     # Rebuild Go binary so latest routes & IPv4 AI client are active
     Push-Location $BackendDir
-    & $GoExe build -o smartcloud_server.exe .\cmd\server
+    & $GoExe build -o finsort_server.exe .\cmd\server
     Pop-Location
 
     # Ensure Python :8001 and Go :8080 are running
@@ -44,7 +44,7 @@ try {
         Push-Location $BackendDir
         $env:PORT = "8080"
         $env:PYTHON_AI_URL = "http://127.0.0.1:8001"
-        $p2 = Start-Process -FilePath "$BackendDir\smartcloud_server.exe" `
+        $p2 = Start-Process -FilePath "$BackendDir\finsort_server.exe" `
             -WorkingDirectory $BackendDir `
             -NoNewWindow -PassThru
         $spawnedProcs += $p2
