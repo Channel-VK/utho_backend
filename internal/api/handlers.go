@@ -558,7 +558,7 @@ func (s *Store) HandleExportRemediation(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, export)
 }
 
-// HandleAIChat proxies the user chat query to Python AI microservice (:8001 /chat).
+// HandleAIChat proxies the user chat query with full fleet, recommendation, forecast & alert context to Python AI (:8001 /chat).
 func (s *Store) HandleAIChat(w http.ResponseWriter, r *http.Request) {
 	var req models.ChatRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -570,7 +570,19 @@ func (s *Store) HandleAIChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := s.aiClient.Chat(req)
+	s.mu.RLock()
+	lightResources := make([]models.Resource, len(s.resources))
+	for i, res := range s.resources {
+		rc := res
+		rc.Timeseries30d = nil
+		lightResources[i] = rc
+	}
+	recsCopy := make([]models.Recommendation, len(s.recommendations))
+	copy(recsCopy, s.recommendations)
+	s.mu.RUnlock()
+
+	alertsCopy := engine.GetActiveAlerts()
+	resp := s.aiClient.ChatWithContext(req, lightResources, recsCopy, alertsCopy)
 	writeJSON(w, http.StatusOK, resp)
 }
 
