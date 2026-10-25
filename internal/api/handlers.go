@@ -61,6 +61,9 @@ func (s *Store) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/alerts", s.HandleGetAlerts)
 	mux.HandleFunc("GET /api/v1/assumptions", s.HandleGetAssumptions)
 	mux.HandleFunc("GET /api/v1/export/remediation", s.HandleExportRemediation)
+	mux.HandleFunc("GET /api/v1/export", s.HandleExportRemediation)
+	mux.HandleFunc("POST /api/v1/export/remediation", s.HandleExportRemediation)
+	mux.HandleFunc("POST /api/v1/export", s.HandleExportRemediation)
 
 	// Unified Python AI (:8001) Proxy & Orchestration Routes
 	mux.HandleFunc("POST /api/v1/ai/parse-scenario", s.HandleAIParseScenario)

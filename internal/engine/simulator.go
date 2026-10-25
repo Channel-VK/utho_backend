@@ -196,13 +196,23 @@ func Simulate(resources []models.Resource, req models.SimulationRequest) models.
 	}
 }
 
-// GenerateRemediation generates executable bash scripts, Terraform HCL, and CSV report for accepted recommendations.
+// GenerateRemediation generates executable bash scripts, Terraform HCL, and CSV report for accepted (or all actionable) recommendations.
 func GenerateRemediation(recs []models.Recommendation) models.RemediationExport {
 	var accepted []models.Recommendation
 	for _, r := range recs {
 		if r.Status == "accepted" {
 			accepted = append(accepted, r)
 		}
+	}
+	targetRecs := accepted
+	scopeDesc := fmt.Sprintf("%d Accepted FinOps Remediations", len(accepted))
+	if len(targetRecs) == 0 {
+		for _, r := range recs {
+			if r.Status != "rejected" {
+				targetRecs = append(targetRecs, r)
+			}
+		}
+		scopeDesc = fmt.Sprintf("%d Actionable FinOps Remediations (Full Pipeline)", len(targetRecs))
 	}
 
 	timestamp := time.Now().UTC().Format(time.RFC3339)
@@ -213,7 +223,7 @@ func GenerateRemediation(recs []models.Recommendation) models.RemediationExport 
 	cliBuilder.WriteString("# ==============================================================================\n")
 	cliBuilder.WriteString("# FINSORT - AUTOMATED REMEDIATION RUNBOOK (UTHO CLOUD)\n")
 	cliBuilder.WriteString(fmt.Sprintf("# Generated at: %s\n", timestamp))
-	cliBuilder.WriteString(fmt.Sprintf("# Total Actions: %d Accepted FinOps Remediations\n", len(accepted)))
+	cliBuilder.WriteString(fmt.Sprintf("# Scope: %s\n", scopeDesc))
 	cliBuilder.WriteString("# ==============================================================================\n\n")
 	cliBuilder.WriteString("set -euo pipefail\n\n")
 	cliBuilder.WriteString("echo \"[INFO] Authenticating with Utho Cloud API...\"\n")
@@ -222,16 +232,30 @@ func GenerateRemediation(recs []models.Recommendation) models.RemediationExport 
 	// 2. Terraform HCL Snippet
 	var hclBuilder strings.Builder
 	hclBuilder.WriteString("# ==============================================================================\n")
-	hclBuilder.WriteString("# FINSORT - TERRAFORM HCL RECONFIGURATIONS\n")
+	hclBuilder.WriteString("# FINSORT - TERRAFORM HCL RECONFIGURATIONS (UTHO CLOUD)\n")
 	hclBuilder.WriteString(fmt.Sprintf("# Generated at: %s\n", timestamp))
+	hclBuilder.WriteString(fmt.Sprintf("# Scope: %s\n", scopeDesc))
 	hclBuilder.WriteString("# Provider: uthocloud/utho\n")
 	hclBuilder.WriteString("# ==============================================================================\n\n")
+	hclBuilder.WriteString("terraform {\n")
+	hclBuilder.WriteString("  required_version = \">= 1.5.0\"\n")
+	hclBuilder.WriteString("  required_providers {\n")
+	hclBuilder.WriteString("    utho = {\n")
+	hclBuilder.WriteString("      source  = \"uthocloud/utho\"\n")
+	hclBuilder.WriteString("      version = \"~> 1.2.4\"\n")
+	hclBuilder.WriteString("    }\n")
+	hclBuilder.WriteString("  }\n")
+	hclBuilder.WriteString("}\n\n")
+	hclBuilder.WriteString("provider \"utho\" {\n")
+	hclBuilder.WriteString("  # Uses UTHO_API_KEY from environment\n")
+	hclBuilder.WriteString("}\n\n")
 
 	// 3. CSV Report
 	var csvBuilder strings.Builder
 	csvBuilder.WriteString("Recommendation ID,Resource ID,Resource Name,Type,Region,Environment,Team,Action,Current Config,Recommended Config,Current Monthly (INR),Projected Monthly (INR),Monthly Savings (INR),Confidence Score,Risk Level,Status\n")
 
-	for _, r := range accepted {
+	for _, r := range targetRecs {
+		tfLabel := strings.ReplaceAll(r.ResourceName, "-", "_")
 		// Append CSV row
 		csvBuilder.WriteString(fmt.Sprintf("\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",%.2f,%.2f,%.2f,%d,\"%s\",\"%s\"\n",
 			r.ID, r.ResourceID, r.ResourceName, r.ResourceType, r.Region, r.Env, r.Team, r.ActionType,
@@ -247,10 +271,16 @@ func GenerateRemediation(recs []models.Recommendation) models.RemediationExport 
 			cliBuilder.WriteString(fmt.Sprintf("utho target --region %s\n", r.Region))
 			cliBuilder.WriteString(fmt.Sprintf("utho vm resize --id %s --plan %s --restart --yes\n\n", r.ResourceID, targetPlan))
 
-			hclBuilder.WriteString(fmt.Sprintf("resource \"utho_cloud_instance\" \"%s\" {\n", strings.ReplaceAll(r.ResourceName, "-", "_")))
-			hclBuilder.WriteString(fmt.Sprintf("  name = \"%s\"\n", r.ResourceName))
-			hclBuilder.WriteString(fmt.Sprintf("  plan = \"%s\" # Optimized from %s\n", targetPlan, strings.Fields(r.CurrentConfig)[0]))
+			hclBuilder.WriteString(fmt.Sprintf("# Rightsize %s (%s): %s -> %s (Saves ₹%.0f/mo)\n", r.ResourceName, r.ResourceID, r.CurrentConfig, r.RecommendedConfig, r.MonthlySavingsINR))
+			hclBuilder.WriteString(fmt.Sprintf("resource \"utho_cloud_instance\" \"%s\" {\n", tfLabel))
+			hclBuilder.WriteString(fmt.Sprintf("  name   = \"%s\"\n", r.ResourceName))
+			hclBuilder.WriteString(fmt.Sprintf("  plan   = \"%s\" # Optimized from %s\n", targetPlan, strings.Fields(r.CurrentConfig)[0]))
 			hclBuilder.WriteString(fmt.Sprintf("  dcslug = \"%s\"\n", r.Region))
+			hclBuilder.WriteString("  tags = {\n")
+			hclBuilder.WriteString(fmt.Sprintf("    Environment = \"%s\"\n", r.Env))
+			hclBuilder.WriteString(fmt.Sprintf("    Team        = \"%s\"\n", r.Team))
+			hclBuilder.WriteString("    ManagedBy   = \"FinSort-FinOps\"\n")
+			hclBuilder.WriteString("  }\n")
 			hclBuilder.WriteString("}\n\n")
 
 		case "SCHEDULE_OFF_HOURS":
@@ -258,10 +288,14 @@ func GenerateRemediation(recs []models.Recommendation) models.RemediationExport 
 			cliBuilder.WriteString(fmt.Sprintf("echo \"[EXEC] Applying hibernation policy to %s...\"\n", r.ResourceName))
 			cliBuilder.WriteString(fmt.Sprintf("utho vm schedule create --id %s --cron \"0 19 * * 1-5 stop\" --cron \"0 9 * * 1-5 start\"\n\n", r.ResourceID))
 
-			hclBuilder.WriteString(fmt.Sprintf("resource \"utho_instance_schedule\" \"%s_offhours\" {\n", strings.ReplaceAll(r.ResourceName, "-", "_")))
-			hclBuilder.WriteString(fmt.Sprintf("  instance_id = utho_cloud_instance.%s.id\n", strings.ReplaceAll(r.ResourceName, "-", "_")))
+			hclBuilder.WriteString(fmt.Sprintf("# Off-Hours Schedule for %s (%s) (Saves ₹%.0f/mo)\n", r.ResourceName, r.ResourceID, r.MonthlySavingsINR))
+			hclBuilder.WriteString(fmt.Sprintf("resource \"utho_instance_schedule\" \"%s_offhours\" {\n", tfLabel))
+			hclBuilder.WriteString(fmt.Sprintf("  instance_id = \"%s\"\n", r.ResourceID))
+			hclBuilder.WriteString(fmt.Sprintf("  name        = \"%s-offhours\"\n", r.ResourceName))
+			hclBuilder.WriteString(fmt.Sprintf("  dcslug      = \"%s\"\n", r.Region))
 			hclBuilder.WriteString("  stop_cron   = \"0 19 * * 1-5\" # 19:00 IST weekdays\n")
 			hclBuilder.WriteString("  start_cron  = \"0 9 * * 1-5\"  # 09:00 IST weekdays\n")
+			hclBuilder.WriteString("  timezone    = \"Asia/Kolkata\"\n")
 			hclBuilder.WriteString("}\n\n")
 
 		case "TERMINATE_ZOMBIE":
@@ -270,21 +304,42 @@ func GenerateRemediation(recs []models.Recommendation) models.RemediationExport 
 			cliBuilder.WriteString(fmt.Sprintf("utho vm snapshot --id %s --name \"archive-pre-term-%s\"\n", r.ResourceID, r.ResourceID))
 			cliBuilder.WriteString(fmt.Sprintf("utho vm destroy --id %s --force\n\n", r.ResourceID))
 
-			hclBuilder.WriteString(fmt.Sprintf("# Resource %s was decommissioned to eliminate zombie compute spend.\n", r.ResourceName))
-			hclBuilder.WriteString(fmt.Sprintf("# terraform state rm utho_cloud_instance.%s\n\n", strings.ReplaceAll(r.ResourceName, "-", "_")))
+			hclBuilder.WriteString(fmt.Sprintf("# Archive Snapshot & Decommission Zombie VM %s (%s) (Saves ₹%.0f/mo)\n", r.ResourceName, r.ResourceID, r.MonthlySavingsINR))
+			hclBuilder.WriteString(fmt.Sprintf("resource \"utho_snapshot\" \"%s_archive\" {\n", tfLabel))
+			hclBuilder.WriteString(fmt.Sprintf("  instance_id       = \"%s\"\n", r.ResourceID))
+			hclBuilder.WriteString(fmt.Sprintf("  name              = \"archive-pre-term-%s\"\n", r.ResourceID))
+			hclBuilder.WriteString("  retention_days    = 30\n")
+			hclBuilder.WriteString("  destroy_source_vm = true\n")
+			hclBuilder.WriteString("}\n\n")
 
 		case "CLEANUP_ORPHAN":
 			if r.ResourceType == "block_volume" {
 				cliBuilder.WriteString(fmt.Sprintf("# Purge Unattached Volume: %s (Saves ₹%.0f/mo)\n", r.ResourceName, r.MonthlySavingsINR))
 				cliBuilder.WriteString(fmt.Sprintf("utho volume delete --id %s --force\n\n", r.ResourceID))
+
+				hclBuilder.WriteString(fmt.Sprintf("# Purge Unattached Block Volume %s (%s) (Saves ₹%.0f/mo)\n", r.ResourceName, r.ResourceID, r.MonthlySavingsINR))
+				hclBuilder.WriteString(fmt.Sprintf("resource \"utho_decommissioned_volume\" \"%s\" {\n", tfLabel))
+				hclBuilder.WriteString(fmt.Sprintf("  volume_id            = \"%s\"\n", r.ResourceID))
+				hclBuilder.WriteString(fmt.Sprintf("  name                 = \"%s\"\n", r.ResourceName))
+				hclBuilder.WriteString(fmt.Sprintf("  dcslug               = \"%s\"\n", r.Region))
+				hclBuilder.WriteString("  snapshot_before_drop = true\n")
+				hclBuilder.WriteString("}\n\n")
 			} else {
 				cliBuilder.WriteString(fmt.Sprintf("# Release Unattached Floating IP: %s (Saves ₹%.0f/mo)\n", r.ResourceName, r.MonthlySavingsINR))
 				cliBuilder.WriteString(fmt.Sprintf("utho ip release --id %s\n\n", r.ResourceID))
+
+				hclBuilder.WriteString(fmt.Sprintf("# Release Unattached Floating IP %s (%s) (Saves ₹%.0f/mo)\n", r.ResourceName, r.ResourceID, r.MonthlySavingsINR))
+				hclBuilder.WriteString(fmt.Sprintf("resource \"utho_decommissioned_floating_ip\" \"%s\" {\n", tfLabel))
+				hclBuilder.WriteString(fmt.Sprintf("  allocation_id   = \"%s\"\n", r.ResourceID))
+				hclBuilder.WriteString(fmt.Sprintf("  name            = \"%s\"\n", r.ResourceName))
+				hclBuilder.WriteString(fmt.Sprintf("  dcslug          = \"%s\"\n", r.Region))
+				hclBuilder.WriteString("  release_to_pool = true\n")
+				hclBuilder.WriteString("}\n\n")
 			}
 		}
 	}
 
-	cliBuilder.WriteString("echo \"[SUCCESS] All accepted FinOps remediations successfully executed!\"\n")
+	cliBuilder.WriteString("echo \"[SUCCESS] All FinOps remediations successfully executed!\"\n")
 
 	return models.RemediationExport{
 		GeneratedAt:   timestamp,

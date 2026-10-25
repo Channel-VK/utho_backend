@@ -67,6 +67,8 @@ type Recommendation struct {
 	RiskLevel           string  `json:"risk_level"` // "LOW", "MEDIUM", "HIGH"
 	ConfidenceScore     int     `json:"confidence_score"`
 	Status              string  `json:"status"` // "pending", "accepted", "rejected"
+	CLICommand          string  `json:"cli_command,omitempty"`
+	TerraformCode       string  `json:"terraform_code,omitempty"`
 }
 
 // SummaryBreakdown represents aggregation by category.

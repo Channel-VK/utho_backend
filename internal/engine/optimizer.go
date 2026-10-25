@@ -76,6 +76,7 @@ func EvaluateResource(res models.Resource, headroomBufferPct float64, counter in
 			}
 
 			status := "pending"
+			tfLabel := strings.ReplaceAll(res.Name, "-", "_")
 
 			return &models.Recommendation{
 				ID:                  recID,
@@ -96,6 +97,11 @@ func EvaluateResource(res models.Resource, headroomBufferPct float64, counter in
 				RiskLevel:           risk,
 				ConfidenceScore:     94,
 				Status:              status,
+				CLICommand:          fmt.Sprintf("utho vm resize --id %s --plan %s --region %s --restart --yes", res.ID, bestPlan.Name, res.Region),
+				TerraformCode: fmt.Sprintf(
+					"resource \"utho_cloud_instance\" \"%s\" {\n  name   = \"%s\"\n  dcslug = \"%s\"\n  plan   = \"%s\" # Rightsized from %s\n  tags = {\n    Environment = \"%s\"\n    Team        = \"%s\"\n    ManagedBy   = \"FinSort-FinOps\"\n  }\n}",
+					tfLabel, res.Name, res.Region, bestPlan.Name, currentPlan.Name, res.Env, res.Team,
+				),
 			}
 		}
 	}
@@ -106,6 +112,7 @@ func EvaluateResource(res models.Resource, headroomBufferPct float64, counter in
 		if !exists {
 			return nil
 		}
+		tfLabel := strings.ReplaceAll(res.Name, "-", "_")
 
 		if strings.Contains(res.Name, "batch") || strings.Contains(res.Name, "recon") || strings.Contains(res.Name, "rollup") || strings.Contains(res.Name, "lake") {
 			// Batch job idle 20 hrs/day
@@ -131,6 +138,11 @@ func EvaluateResource(res models.Resource, headroomBufferPct float64, counter in
 				RiskLevel:           "LOW",
 				ConfidenceScore:     96,
 				Status:              "pending",
+				CLICommand:          fmt.Sprintf("utho vm schedule create --id %s --stop-cron \"0 4 * * *\" --start-cron \"0 0 * * *\" --timezone \"Asia/Kolkata\"", res.ID),
+				TerraformCode: fmt.Sprintf(
+					"resource \"utho_instance_schedule\" \"%s_batch\" {\n  instance_id = \"%s\"\n  name        = \"%s-batch-window\"\n  dcslug      = \"%s\"\n  start_cron  = \"0 0 * * *\"\n  stop_cron   = \"0 4 * * *\"\n  timezone    = \"Asia/Kolkata\"\n}",
+					tfLabel, res.ID, res.Name, res.Region,
+				),
 			}
 		}
 
@@ -161,6 +173,11 @@ func EvaluateResource(res models.Resource, headroomBufferPct float64, counter in
 			RiskLevel:           "LOW",
 			ConfidenceScore:     95,
 			Status:              status,
+			CLICommand:          fmt.Sprintf("utho vm schedule create --id %s --stop-cron \"0 19 * * 1-5\" --start-cron \"0 9 * * 1-5\" --timezone \"Asia/Kolkata\"", res.ID),
+			TerraformCode: fmt.Sprintf(
+				"resource \"utho_instance_schedule\" \"%s_offhours\" {\n  instance_id = \"%s\"\n  name        = \"%s-offhours\"\n  dcslug      = \"%s\"\n  stop_cron   = \"0 19 * * 1-5\"\n  start_cron  = \"0 9 * * 1-5\"\n  timezone    = \"Asia/Kolkata\"\n}",
+				tfLabel, res.ID, res.Name, res.Region,
+			),
 		}
 	}
 
@@ -170,6 +187,7 @@ func EvaluateResource(res models.Resource, headroomBufferPct float64, counter in
 		if !exists {
 			return nil
 		}
+		tfLabel := strings.ReplaceAll(res.Name, "-", "_")
 
 		// Retain 5% for safety snapshot storage, save 95%
 		savings := round2(currentPlan.MonthlyRateINR * 0.95)
@@ -194,12 +212,18 @@ func EvaluateResource(res models.Resource, headroomBufferPct float64, counter in
 			RiskLevel:           "LOW",
 			ConfidenceScore:     98,
 			Status:              "pending",
+			CLICommand:          fmt.Sprintf("utho vm snapshot --id %s --name \"archive-%s\" && utho vm destroy --id %s --force", res.ID, res.ID, res.ID),
+			TerraformCode: fmt.Sprintf(
+				"resource \"utho_snapshot\" \"%s_archive\" {\n  instance_id       = \"%s\"\n  name              = \"archive-pre-decommission-%s\"\n  retention_days    = 30\n  destroy_source_vm = true\n}",
+				tfLabel, res.ID, res.ID,
+			),
 		}
 	}
 
 	// 4. ORPHANED BLOCK VOLUME -> CLEANUP_ORPHAN
 	if res.OptimizationStatus == "ORPHANED" && res.Type == "block_volume" {
 		savings := res.MonthlyCostINR
+		tfLabel := strings.ReplaceAll(res.Name, "-", "_")
 		return &models.Recommendation{
 			ID:                  recID,
 			ResourceID:          res.ID,
@@ -219,12 +243,18 @@ func EvaluateResource(res models.Resource, headroomBufferPct float64, counter in
 			RiskLevel:           "LOW",
 			ConfidenceScore:     99,
 			Status:              "pending",
+			CLICommand:          fmt.Sprintf("utho volume delete --id %s --force", res.ID),
+			TerraformCode: fmt.Sprintf(
+				"resource \"utho_decommissioned_volume\" \"%s\" {\n  volume_id            = \"%s\"\n  name                 = \"%s\"\n  dcslug               = \"%s\"\n  size_gb              = %d\n  snapshot_before_drop = true\n}",
+				tfLabel, res.ID, res.Name, res.Region, res.DiskGB,
+			),
 		}
 	}
 
 	// 5. ORPHANED PUBLIC IP -> CLEANUP_ORPHAN
 	if res.OptimizationStatus == "ORPHANED" && res.Type == "public_ip" {
 		savings := res.MonthlyCostINR
+		tfLabel := strings.ReplaceAll(res.Name, "-", "_")
 		return &models.Recommendation{
 			ID:                  recID,
 			ResourceID:          res.ID,
@@ -244,6 +274,11 @@ func EvaluateResource(res models.Resource, headroomBufferPct float64, counter in
 			RiskLevel:           "LOW",
 			ConfidenceScore:     99,
 			Status:              "pending",
+			CLICommand:          fmt.Sprintf("utho ip release --id %s", res.ID),
+			TerraformCode: fmt.Sprintf(
+				"resource \"utho_decommissioned_floating_ip\" \"%s\" {\n  allocation_id = \"%s\"\n  name          = \"%s\"\n  dcslug        = \"%s\"\n  release_to_pool = true\n}",
+				tfLabel, res.ID, res.Name, res.Region,
+			),
 		}
 	}
 

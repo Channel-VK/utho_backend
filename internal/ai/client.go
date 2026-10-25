@@ -101,15 +101,18 @@ type AIExplainRequest struct {
 // ExplainResource requests deep root-cause explanation from Python AI microservice,
 // falling back to deterministic mathematical proof if Python service is offline.
 func (c *Client) ExplainResource(res models.Resource) *models.EngineeringAnalysis {
+	fallback := c.generateDeterministicAnalysis(res)
 	analysis, err := c.callPythonExplain(res)
 	if err == nil && analysis != nil {
 		if analysis.Provider == "" {
 			analysis.Provider = "Python-AI-Service (:8001)"
 		}
+		if strings.TrimSpace(analysis.TerraformHCL) == "" {
+			analysis.TerraformHCL = fallback.TerraformHCL
+		}
 		return analysis
 	}
 
-	fallback := c.generateDeterministicAnalysis(res)
 	fallback.Provider = "Deterministic-Rule-Engine (Offline Fallback)"
 	return fallback
 }
@@ -945,6 +948,10 @@ func (c *Client) GetChatHistory(conversationID string) (models.ChatHistoryRespon
 }
 
 func (c *Client) generateDeterministicAnalysis(res models.Resource) *models.EngineeringAnalysis {
+	envTag := res.Env
+	if envTag == "" {
+		envTag = "prod"
+	}
 	defaultQuantiles := []models.QuantileForecastPoint{
 		{Timestamp: "2026-10-24T04:00:00Z", HourLabel: "+4h (09:00 IST)", CPUQ10: 9.2, CPUQ50: 14.5, CPUQ90: 22.0, MemQ10: 18.0, MemQ50: 22.5, MemQ90: 28.0},
 		{Timestamp: "2026-10-24T08:00:00Z", HourLabel: "+8h (13:00 IST)", CPUQ10: 11.0, CPUQ50: 16.8, CPUQ90: 25.4, MemQ10: 19.5, MemQ50: 24.0, MemQ90: 30.2},
@@ -975,6 +982,7 @@ func (c *Client) generateDeterministicAnalysis(res models.Resource) *models.Engi
 		peakQuantiles[3].MemQ50 = 64.0
 		peakQuantiles[3].MemQ90 = 74.5
 
+		tfName := strings.ReplaceAll(strings.ReplaceAll(res.Name, "-", "_"), ".", "_")
 		return &models.EngineeringAnalysis{
 			ResourceID:             res.ID,
 			WorkloadClassification: "Bursty Daily Peak Load (Peak-Safety Guardrail Active)",
@@ -982,6 +990,10 @@ func (c *Client) generateDeterministicAnalysis(res models.Resource) *models.Engi
 			RiskScore:              92,
 			ConfidenceLevel:        "HIGH",
 			ConfidenceReason:       "30-day continuous telemetry (180 4-hour intervals = 720 hours) validates p95 and p99 peak envelopes.",
+			TerraformHCL: fmt.Sprintf(
+				"# DO NOT DOWNSIZE: Peak-Safety Guardrail Locked (%s)\nresource \"utho_cloud_instance\" %q {\n  name   = %q\n  dcslug = %q\n  planid = %q\n\n  lifecycle {\n    prevent_destroy = true\n  }\n\n  tags = {\n    managed_by      = \"utho-finops-intelligence\"\n    environment     = %q\n    peak_protection = \"locked\"\n  }\n}",
+				res.ID, tfName, res.Name, res.Region, res.Plan, envTag,
+			),
 			PeakHeadroomProof: fmt.Sprintf(
 				"MATHEMATICAL PEAK HEADROOM PROOF:\n"+
 					"- Current Plan: %s (%d vCPU, %d GB RAM)\n"+
@@ -1048,6 +1060,7 @@ func (c *Client) generateDeterministicAnalysis(res models.Resource) *models.Engi
 		projP95 := (float64(res.VCPU) * p95) / float64(targetVCPU)
 		projP99 := (float64(res.VCPU) * p99) / float64(targetVCPU)
 
+		tfName := strings.ReplaceAll(strings.ReplaceAll(res.Name, "-", "_"), ".", "_")
 		return &models.EngineeringAnalysis{
 			ResourceID:             res.ID,
 			WorkloadClassification: "Sustainably Over-Provisioned Compute",
@@ -1055,6 +1068,10 @@ func (c *Client) generateDeterministicAnalysis(res models.Resource) *models.Engi
 			RiskScore:              14,
 			ConfidenceLevel:        "HIGH",
 			ConfidenceReason:       "30-day continuous telemetry (180 4-hour intervals = 720 hours) validates p95 and p99 peak envelopes.",
+			TerraformHCL: fmt.Sprintf(
+				"resource \"utho_cloud_instance\" %q {\n  name   = %q\n  dcslug = %q\n  planid = \"c8.large\"\n\n  tags = {\n    managed_by  = \"utho-finops-intelligence\"\n    environment = %q\n    action      = \"rightsize\"\n  }\n}",
+				tfName, res.Name, res.Region, envTag,
+			),
 			PeakHeadroomProof: fmt.Sprintf(
 				"MATHEMATICAL PEAK HEADROOM PROOF:\n"+
 					"- Current Plan: %s (%d vCPU, %d GB RAM)\n"+
@@ -1103,6 +1120,7 @@ func (c *Client) generateDeterministicAnalysis(res models.Resource) *models.Engi
 		}
 
 	case "IDLE_SCHEDULE_CANDIDATE":
+		tfName := strings.ReplaceAll(strings.ReplaceAll(res.Name, "-", "_"), ".", "_")
 		return &models.EngineeringAnalysis{
 			ResourceID:             res.ID,
 			WorkloadClassification: "Temporal Off-Hours Hibernation Candidate",
@@ -1110,6 +1128,10 @@ func (c *Client) generateDeterministicAnalysis(res models.Resource) *models.Engi
 			RiskScore:              8,
 			ConfidenceLevel:        "HIGH",
 			ConfidenceReason:       "30-day hourly p95 CPU stays below 5% across 118 off-hours per week.",
+			TerraformHCL: fmt.Sprintf(
+				"resource \"utho_instance_schedule\" %q {\n  instance_id = %q\n  timezone    = \"Asia/Kolkata\"\n  stop_cron   = \"0 19 * * 1-5\"\n  start_cron  = \"0 9 * * 1-5\"\n  enabled     = true\n}",
+				tfName+"_offhours", res.ID,
+			),
 			PeakHeadroomProof: "SCHEDULE DUTY CYCLE MATH:\n" +
 				"- Active Duty Cycle: 50 hours/week (Mon-Fri 09:00-19:00 IST)\n" +
 				"- Idle Off-Hours: 118 hours/week (Nights + Weekends, CPU < 2%)\n" +
@@ -1144,6 +1166,7 @@ func (c *Client) generateDeterministicAnalysis(res models.Resource) *models.Engi
 		}
 
 	case "ZOMBIE":
+		tfName := strings.ReplaceAll(strings.ReplaceAll(res.Name, "-", "_"), ".", "_")
 		return &models.EngineeringAnalysis{
 			ResourceID:             res.ID,
 			WorkloadClassification: "Abandoned Zombie Workload",
@@ -1151,6 +1174,10 @@ func (c *Client) generateDeterministicAnalysis(res models.Resource) *models.Engi
 			RiskScore:              5,
 			ConfidenceLevel:        "HIGH",
 			ConfidenceReason:       "30 consecutive days of <3.5% p99 CPU and <0.5 Mbps network traffic.",
+			TerraformHCL: fmt.Sprintf(
+				"resource \"utho_snapshot\" %q {\n  instance_id    = %q\n  name           = \"pre-decommission-%s\"\n  retention_days = 30\n}\n\n# Remove utho_cloud_instance.%s from state after snapshot completion",
+				tfName+"_archive", res.ID, res.ID, tfName,
+			),
 			PeakHeadroomProof: fmt.Sprintf(
 				"INACTIVITY PROOF:\n"+
 					"- Inactive Duration: >90 days continuous\n"+
@@ -1177,6 +1204,7 @@ func (c *Client) generateDeterministicAnalysis(res models.Resource) *models.Engi
 		}
 
 	case "ORPHANED":
+		tfName := strings.ReplaceAll(strings.ReplaceAll(res.Name, "-", "_"), ".", "_")
 		return &models.EngineeringAnalysis{
 			ResourceID:             res.ID,
 			WorkloadClassification: "Unattached Orphaned Infrastructure",
@@ -1184,6 +1212,10 @@ func (c *Client) generateDeterministicAnalysis(res models.Resource) *models.Engi
 			RiskScore:              1,
 			ConfidenceLevel:        "HIGH",
 			ConfidenceReason:       "Explicit unattached state with 0 IOPS across 30 days.",
+			TerraformHCL: fmt.Sprintf(
+				"resource \"utho_decommissioned_asset\" %q {\n  asset_id   = %q\n  asset_type = %q\n  dcslug     = %q\n  purge      = true\n}",
+				tfName, res.ID, res.Type, res.Region,
+			),
 			PeakHeadroomProof: fmt.Sprintf(
 				"ORPHAN STATE AUDIT:\n"+
 					"- Resource Type: %s\n"+
@@ -1207,17 +1239,22 @@ func (c *Client) generateDeterministicAnalysis(res models.Resource) *models.Engi
 		}
 
 	default:
+		tfName := strings.ReplaceAll(strings.ReplaceAll(res.Name, "-", "_"), ".", "_")
 		return &models.EngineeringAnalysis{
 			ResourceID:             res.ID,
 			WorkloadClassification: "Balanced Optimal Instance",
 			DownsizingSafe:         false,
 			RiskScore:              20,
 			ConfidenceLevel:        "HIGH",
-			PeakHeadroomProof:      "Instance operates within healthy utilization thresholds (40-70% peak CPU). No rightsizing required.",
-			SafetyBufferAnalysis:   "Headroom is calibrated correctly for existing workload demands.",
-			TechnicalExplanation:   "Current compute and memory specifications closely match workload distribution.",
-			BlastRadiusAnalysis:    "No action recommended.",
-			ActionableNextSteps:    []string{"Continue routine telemetry monitoring."},
+			TerraformHCL: fmt.Sprintf(
+				"resource \"utho_cloud_instance\" %q {\n  name   = %q\n  dcslug = %q\n  planid = %q\n\n  tags = {\n    managed_by  = \"utho-finops-intelligence\"\n    environment = %q\n  }\n}",
+				tfName, res.Name, res.Region, res.Plan, envTag,
+			),
+			PeakHeadroomProof:    "Instance operates within healthy utilization thresholds (40-70% peak CPU). No rightsizing required.",
+			SafetyBufferAnalysis: "Headroom is calibrated correctly for existing workload demands.",
+			TechnicalExplanation: "Current compute and memory specifications closely match workload distribution.",
+			BlastRadiusAnalysis:  "No action recommended.",
+			ActionableNextSteps:  []string{"Continue routine telemetry monitoring."},
 		}
 	}
 }
