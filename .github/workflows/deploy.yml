@@ -29,6 +29,24 @@ jobs:
             mkdir -p ~/transfinitte_26
             cd ~/transfinitte_26
 
+            # 0. Preserve existing GOOGLE_API_KEY on VM if not set in GitHub Secrets
+            if [ -z "${GOOGLE_API_KEY:-}" ] && [ -f ~/transfinitte_26/.utho_env ]; then
+              source ~/transfinitte_26/.utho_env
+            fi
+            if [ -z "${GOOGLE_API_KEY:-}" ]; then
+              EXISTING_KEY=$(docker inspect utho-ai --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null | grep '^GOOGLE_API_KEY=' | cut -d= -f2- || true)
+              if [ -z "$EXISTING_KEY" ] && [ -f ~/transfinitte_26/utho_backend/docker-compose.yml ]; then
+                EXISTING_KEY=$(grep 'GOOGLE_API_KEY:' ~/transfinitte_26/utho_backend/docker-compose.yml | awk '{print $2}' | grep -v '^\$' || true)
+              fi
+              if [ -n "$EXISTING_KEY" ]; then
+                export GOOGLE_API_KEY="$EXISTING_KEY"
+              fi
+            fi
+            if [ -n "${GOOGLE_API_KEY:-}" ]; then
+              echo "export GOOGLE_API_KEY='$GOOGLE_API_KEY'" > ~/transfinitte_26/.utho_env
+              chmod 600 ~/transfinitte_26/.utho_env
+            fi
+
             # 1. Update utho_backend (master)
             echo "--> Updating utho_backend..."
             if [ ! -d "utho_backend" ]; then
@@ -38,6 +56,11 @@ jobs:
             git remote set-url origin "https://$GH_PAT@github.com/Channel-VK/utho_backend.git"
             git fetch origin
             git reset --hard origin/master 2>/dev/null || git reset --hard origin/main 2>/dev/null
+
+            if [ -n "${GOOGLE_API_KEY:-}" ]; then
+              echo "GOOGLE_API_KEY=$GOOGLE_API_KEY" > ~/transfinitte_26/utho_backend/.env
+              chmod 600 ~/transfinitte_26/utho_backend/.env
+            fi
 
             # 2. Update utho_frontend (master)
             echo "--> Updating utho_frontend..."
@@ -68,10 +91,10 @@ jobs:
             sudo fuser -k 80/tcp 2>/dev/null || true
 
             cd ~/transfinitte_26/utho_backend
-            
+
             export FRONTEND_PORT=80
             export VITE_API_BASE_URL=/api/v1
-            export GOOGLE_API_KEY="$GOOGLE_API_KEY"
+            export GOOGLE_API_KEY="${GOOGLE_API_KEY:-}"
 
             docker compose down --remove-orphans || true
             FRONTEND_PORT=80 docker compose up --build -d
@@ -83,7 +106,7 @@ jobs:
 
             # 6. Verify Nginx and API on Port 80
             echo "--> Running smoke tests on Port 80..."
-            curl -s -f http://localhost/ >/dev/null && echo "✅ Nginx React SPA (:80) Live" || echo "❌ Frontend failed"
-            curl -s -f http://localhost/api/v1/status >/dev/null && echo "✅ Nginx -> Go Backend (/api/v1/status) Proxy Live" || echo "❌ API Proxy failed"
+            curl -s -f http://localhost/ >/dev/null && echo "Nginx React SPA (:80) Live" || echo "Frontend failed"
+            curl -s -f http://localhost/api/v1/status >/dev/null && echo "Nginx -> Go Backend (/api/v1/status) Proxy Live" || echo "API Proxy failed"
 
             echo "Deployment Succeeded! Live at: http://$VM_HOST/"
