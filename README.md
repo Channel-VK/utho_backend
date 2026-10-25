@@ -4,7 +4,7 @@
 
 ---
 
-## 🏛️ 3-Repository System Architecture
+## 3-Repository System Architecture
 
 | Repository | Tech Stack | Port | Responsibility |
 | :--- | :--- | :--- | :--- |
@@ -14,7 +14,7 @@
 
 ---
 
-## ⚡ Full-Stack Setup Instructions (All 3 Repos)
+## Full-Stack Setup Instructions (All 3 Repos)
 
 ### 1. Start Go FinOps Engine & API (`utho_backend` — Port `:8080`)
 ```bash
@@ -46,7 +46,7 @@ npm run dev
 
 ---
 
-## 🛡️ Core FinOps Engineering Logic (For Jury Review)
+## Core FinOps Engineering Logic (For Jury Review)
 
 ### 1. Peak-Safety Guardrail (`internal/engine/optimizer.go`)
 Naive FinOps tools downsize VMs based on **average** CPU, causing production outages on bursty workloads. FinSort enforces:
@@ -70,7 +70,7 @@ $$\text{Projected } p95 = \frac{\text{Current vCPU} \times \text{Observed } p95}
 
 ---
 
-## 🔌 REST API Endpoints (`/api/v1`)
+## REST API Endpoints (`/api/v1`)
 
 | Method & Path | Description |
 | :--- | :--- |
@@ -89,7 +89,7 @@ $$\text{Projected } p95 = \frac{\text{Current vCPU} \times \text{Observed } p95}
 
 ---
 
-## 🧪 Verification & Test Suite
+## Verification & Test Suite
 
 ```bash
 go vet ./...
