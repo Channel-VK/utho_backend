@@ -490,12 +490,22 @@ func (c *Client) GetAIForecast(days int, headroom float64, resources []models.Re
 	ctx, cancel := context.WithTimeout(context.Background(), 4000*time.Millisecond)
 	defer cancel()
 
-	// Send lightweight resource & recommendation cost summaries
+	var acceptedSavings float64
+	for _, rec := range recs {
+		if rec.Status == "accepted" {
+			acceptedSavings += rec.MonthlySavingsINR
+		}
+	}
+
+	// Send lightweight resource & recommendation cost summaries with accepted savings
 	payload, err := json.Marshal(map[string]any{
-		"days":            days,
-		"headroom":        headroom,
-		"resources":       resources,
-		"recommendations": recs,
+		"days":                           days,
+		"horizon_days":                   days,
+		"headroom":                       headroom,
+		"accepted_savings_inr":           acceptedSavings,
+		"accepted_savings_inr_per_month": acceptedSavings,
+		"resources":                      resources,
+		"recommendations":                recs,
 	})
 	if err == nil {
 		req, errReq := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/api/v1/ai/forecast", bytes.NewBuffer(payload))
