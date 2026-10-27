@@ -114,7 +114,7 @@ func (c *Client) GetStatusInfo() (bool, []string, bool, string) {
 
 // CheckLLMHealth queries Python :8001 /api/v1/ai/llm-health for live Gemini API key connectivity and latency.
 func (c *Client) CheckLLMHealth() models.LLMHealthResponse {
-	ctx, cancel := context.WithTimeout(context.Background(), 8000*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 20000*time.Millisecond)
 	defer cancel()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/api/v1/ai/llm-health", nil)
@@ -219,7 +219,7 @@ func (c *Client) callPythonExplain(res models.Resource) (*models.EngineeringAnal
 // to Python :8001, falls back to deterministic Go parser if offline,
 // and computes the live SimulationResult across the 85 Utho resources.
 func (c *Client) ParseNLScenario(query string, resources []models.Resource) models.NLScenarioResponse {
-	ctx, cancel := context.WithTimeout(context.Background(), 4000*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 25000*time.Millisecond)
 	defer cancel()
 
 	// Construct grounded fleet summary from real 85 resources
@@ -944,20 +944,13 @@ func (c *Client) ChatWithContext(req models.ChatRequest, resources []models.Reso
 
 	// Check for conversational greetings
 	trimmedLower := strings.TrimSpace(lower)
-	if trimmedLower == "hi" || trimmedLower == "hello" || trimmedLower == "hey" || trimmedLower == "yo" || strings.HasPrefix(trimmedLower, "hi ") || strings.HasPrefix(trimmedLower, "hello ") {
-		ans := "Hello! I am FinSort Copilot, your Utho Cloud FinOps assistant. How can I help you optimize your fleet or explore What-If cost simulations today?"
+	if isCasualGreeting(trimmedLower) {
 		return models.ChatResponse{
 			ConversationID: convID,
-			Answer:         ans,
+			Answer:         "Hello! I am FinSort Copilot. How can I help you today?",
 			Tool:           "conversational_greeting",
-			Data: map[string]any{
-				"copilot_status":              "online",
-				"total_resources":             len(resources),
-				"current_monthly_spend_inr":   currentSpend,
-				"accepted_monthly_savings_inr": acceptedSavings,
-				"total_potential_savings_inr": totalSavings,
-			},
-			Model: "gemini-3.8-flash",
+			Data:           map[string]any{},
+			Model:          "gemini-3.8-flash",
 		}
 	}
 
@@ -1663,4 +1656,46 @@ func (c *Client) generateDeterministicAnalysis(res models.Resource) *models.Engi
 
 func round2(val float64) float64 {
 	return float64(int(val*100+0.5)) / 100.0
+}
+
+func isCasualGreeting(s string) bool {
+	clean := strings.ToLower(strings.TrimSpace(s))
+	clean = strings.Map(func(r rune) rune {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == ' ' {
+			return r
+		}
+		return -1
+	}, clean)
+	clean = strings.TrimSpace(clean)
+	greetings := map[string]bool{
+		"hi": true, "hello": true, "hey": true, "hola": true, "yo": true,
+		"howdy": true, "sup": true, "greetings": true,
+		"good morning": true, "good afternoon": true, "good evening": true, "good day": true,
+		"hi there": true, "hello there": true, "hey there": true, "whats up": true,
+	}
+	if greetings[clean] {
+		return true
+	}
+	words := strings.Fields(clean)
+	if len(words) <= 3 {
+		hasGreet := false
+		for _, w := range words {
+			if greetings[w] {
+				hasGreet = true
+				break
+			}
+		}
+		if hasGreet {
+			tech := []string{"vm", "cost", "spend", "saving", "alert", "alt", "forecast", "rightsize", "what-if", "what if", "audit", "disk", "ip"}
+			hasTech := false
+			for _, t := range tech {
+				if strings.Contains(clean, t) {
+					hasTech = true
+					break
+				}
+			}
+			return !hasTech
+		}
+	}
+	return false
 }

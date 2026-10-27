@@ -87,7 +87,13 @@ func Simulate(resources []models.Resource, req models.SimulationRequest) models.
 			}
 
 			if strings.Contains(res.Name, "batch") || strings.Contains(res.Name, "recon") || strings.Contains(res.Name, "rollup") || strings.Contains(res.Name, "lake") {
-				// Batch job
+				// Batch job - only apply if target region and env match
+				if req.TargetRegion != "" && !matchRegion(res.Region, req.TargetRegion) {
+					continue
+				}
+				if req.TargetEnvironment != "" && !matchEnv(res.Env, req.TargetEnvironment) {
+					continue
+				}
 				savings := res.MonthlyCostINR * (20.0 / 24.0)
 				simulatedSavings += savings
 				devSavings += savings
@@ -99,10 +105,10 @@ func Simulate(resources []models.Resource, req models.SimulationRequest) models.
 				isStaging := res.Env == "staging"
 
 				if isDev && req.DevOffHoursEnabled {
-					if req.TargetRegion != "" && res.Region != req.TargetRegion {
+					if req.TargetRegion != "" && !matchRegion(res.Region, req.TargetRegion) {
 						continue
 					}
-					if req.TargetEnvironment != "" && !strings.EqualFold(res.Env, req.TargetEnvironment) && req.TargetEnvironment != "all" {
+					if req.TargetEnvironment != "" && !matchEnv(res.Env, req.TargetEnvironment) {
 						continue
 					}
 					hoursOff := float64(req.DevShutdownHoursPerWeek)
@@ -116,10 +122,10 @@ func Simulate(resources []models.Resource, req models.SimulationRequest) models.
 					affectedCount++
 					eligibleVMsCount++
 				} else if isStaging && req.StagingWeekendOffEnabled {
-					if req.TargetRegion != "" && res.Region != req.TargetRegion {
+					if req.TargetRegion != "" && !matchRegion(res.Region, req.TargetRegion) {
 						continue
 					}
-					if req.TargetEnvironment != "" && !strings.EqualFold(res.Env, req.TargetEnvironment) && req.TargetEnvironment != "all" {
+					if req.TargetEnvironment != "" && !matchEnv(res.Env, req.TargetEnvironment) {
 						continue
 					}
 					hoursOff := float64(req.StagingShutdownHoursPerWeek)
@@ -360,4 +366,46 @@ func GenerateRemediation(recs []models.Recommendation) models.RemediationExport 
 		TerraformHCL:  hclBuilder.String(),
 		CSVReport:     csvBuilder.String(),
 	}
+}
+
+func matchEnv(resEnv, targetEnv string) bool {
+	if targetEnv == "" || strings.EqualFold(targetEnv, "all") {
+		return true
+	}
+	t := strings.ToLower(strings.TrimSpace(targetEnv))
+	r := strings.ToLower(strings.TrimSpace(resEnv))
+	if t == r {
+		return true
+	}
+	if (t == "development" || t == "dev") && (r == "development" || r == "dev") {
+		return true
+	}
+	if (t == "production" || t == "prod") && (r == "production" || r == "prod") {
+		return true
+	}
+	if (t == "staging" || t == "stage") && (r == "staging" || r == "stage") {
+		return true
+	}
+	return strings.HasPrefix(t, r) || strings.HasPrefix(r, t)
+}
+
+func matchRegion(resRegion, targetRegion string) bool {
+	if targetRegion == "" || strings.EqualFold(targetRegion, "all") {
+		return true
+	}
+	t := strings.ToLower(strings.TrimSpace(targetRegion))
+	r := strings.ToLower(strings.TrimSpace(resRegion))
+	if t == r {
+		return true
+	}
+	if (strings.Contains(t, "bangalore") || strings.Contains(t, "blr")) && (strings.Contains(r, "bangalore") || strings.Contains(r, "blr")) {
+		return true
+	}
+	if (strings.Contains(t, "mumbai") || strings.Contains(t, "bom")) && (strings.Contains(r, "mumbai") || strings.Contains(r, "bom")) {
+		return true
+	}
+	if (strings.Contains(t, "noida") || strings.Contains(t, "del")) && (strings.Contains(r, "noida") || strings.Contains(r, "del")) {
+		return true
+	}
+	return false
 }

@@ -202,3 +202,34 @@ func TestRecommendationsInitialStatus(t *testing.T) {
 		t.Fatalf("expected 0.0 accepted savings pct, got %f", summary.AcceptedSavingsPct)
 	}
 }
+
+func TestSimulationScopedByRegionAndEnvironment(t *testing.T) {
+	resources := seed.GenerateDataset()
+
+	// 1. Scoped simulation: dev environment in Bangalore
+	reqScoped := models.SimulationRequest{
+		DevOffHoursEnabled:         true,
+		DevShutdownHoursPerWeek:    112,
+		SafetyHeadroomBufferPct:    25,
+		PurgeOrphanedOlderThanDays: 90,
+		TargetRegion:               "in-bangalore-1",
+		TargetEnvironment:          "development", // Note "development" should match "dev" in resources
+	}
+
+	resScoped := engine.Simulate(resources, reqScoped)
+	if resScoped.Breakdown.DevSchedulingSavingsINR <= 0 {
+		t.Fatalf("expected positive dev scheduling savings for development in in-bangalore-1, got %f", resScoped.Breakdown.DevSchedulingSavingsINR)
+	}
+
+	// 2. Unscoped simulation should have higher or equal dev savings
+	reqAll := models.SimulationRequest{
+		DevOffHoursEnabled:         true,
+		DevShutdownHoursPerWeek:    112,
+		SafetyHeadroomBufferPct:    25,
+		PurgeOrphanedOlderThanDays: 90,
+	}
+	resAll := engine.Simulate(resources, reqAll)
+	if resAll.Breakdown.DevSchedulingSavingsINR < resScoped.Breakdown.DevSchedulingSavingsINR {
+		t.Fatalf("unscoped dev savings (%f) should be >= scoped dev savings (%f)", resAll.Breakdown.DevSchedulingSavingsINR, resScoped.Breakdown.DevSchedulingSavingsINR)
+	}
+}
