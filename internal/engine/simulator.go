@@ -99,6 +99,12 @@ func Simulate(resources []models.Resource, req models.SimulationRequest) models.
 				isStaging := res.Env == "staging"
 
 				if isDev && req.DevOffHoursEnabled {
+					if req.TargetRegion != "" && res.Region != req.TargetRegion {
+						continue
+					}
+					if req.TargetEnvironment != "" && !strings.EqualFold(res.Env, req.TargetEnvironment) && req.TargetEnvironment != "all" {
+						continue
+					}
 					hoursOff := float64(req.DevShutdownHoursPerWeek)
 					if hoursOff <= 0 {
 						hoursOff = 118.0
@@ -110,6 +116,12 @@ func Simulate(resources []models.Resource, req models.SimulationRequest) models.
 					affectedCount++
 					eligibleVMsCount++
 				} else if isStaging && req.StagingWeekendOffEnabled {
+					if req.TargetRegion != "" && res.Region != req.TargetRegion {
+						continue
+					}
+					if req.TargetEnvironment != "" && !strings.EqualFold(res.Env, req.TargetEnvironment) && req.TargetEnvironment != "all" {
+						continue
+					}
 					hoursOff := float64(req.StagingShutdownHoursPerWeek)
 					if hoursOff <= 0 {
 						hoursOff = 64.0 // Staging weekend off fallback (Friday 19:00 to Monday 07:00 approx 60h)

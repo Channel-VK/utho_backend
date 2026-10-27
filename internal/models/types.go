@@ -161,6 +161,22 @@ type ServiceStatusResponse struct {
 	AIEnginePort      int      `json:"ai_engine_port"`
 	AIEngineService   string   `json:"ai_engine_service"`
 	AIFeatures        []string `json:"ai_features"`
+	LLMConfigured     bool     `json:"llm_configured,omitempty"`
+	LLMModel          string   `json:"llm_model,omitempty"`
+}
+
+// LLMHealthResponse is returned by GET /api/v1/ai/llm-health.
+type LLMHealthResponse struct {
+	Status                string            `json:"status"`
+	APIKeyConfigured      bool              `json:"api_key_configured"`
+	MaskedKey             string            `json:"masked_key,omitempty"`
+	LiveCallSuccess       bool              `json:"live_call_success"`
+	ActiveModel           string            `json:"active_model,omitempty"`
+	SampleResponse        string            `json:"sample_response,omitempty"`
+	LatencyMS             float64           `json:"latency_ms,omitempty"`
+	Error                 string            `json:"error,omitempty"`
+	CandidateModelsTested []string          `json:"candidate_models_tested,omitempty"`
+	CandidateErrors       map[string]string `json:"candidate_errors,omitempty"`
 }
 
 // Alert represents an anomaly or capacity hazard, enriched with Python AI root-cause & TTF analysis.
@@ -195,6 +211,8 @@ type SimulationRequest struct {
 	StagingShutdownHoursPerWeek int     `json:"staging_shutdown_hours_per_week"`
 	SafetyHeadroomBufferPct     float64 `json:"safety_headroom_buffer_pct"`
 	PurgeOrphanedOlderThanDays  int     `json:"purge_orphaned_older_than_days"`
+	TargetRegion                string  `json:"target_region,omitempty"`
+	TargetEnvironment           string  `json:"target_environment,omitempty"`
 }
 
 // EligibleChange details changes in recommendation eligibility.

@@ -65,6 +65,11 @@ func (s *Store) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/export/remediation", s.HandleExportRemediation)
 	mux.HandleFunc("POST /api/v1/export", s.HandleExportRemediation)
 
+	// Health and Telemetry Endpoints
+	mux.HandleFunc("GET /api/v1/health", s.HandleHealth)
+	mux.HandleFunc("GET /health", s.HandleHealth)
+	mux.HandleFunc("GET /api/v1/ai/llm-health", s.HandleAILLMHealth)
+
 	// Unified Python AI (:8001) Proxy & Orchestration Routes
 	mux.HandleFunc("POST /api/v1/ai/parse-scenario", s.HandleAIParseScenario)
 	mux.HandleFunc("GET /api/v1/ai/forecast", s.HandleAIForecast)
@@ -79,7 +84,7 @@ func (s *Store) RegisterRoutes(mux *http.ServeMux) {
 
 // HandleGetStatus reports connection telemetry for both Go Engine (:8080) and Python AI (:8001).
 func (s *Store) HandleGetStatus(w http.ResponseWriter, r *http.Request) {
-	aiConnected, features := s.aiClient.CheckHealth()
+	aiConnected, features, llmConfigured, googleModel := s.aiClient.GetStatusInfo()
 	status := models.ServiceStatusResponse{
 		GoEngineConnected: true,
 		GoEnginePort:      8080,
@@ -87,8 +92,31 @@ func (s *Store) HandleGetStatus(w http.ResponseWriter, r *http.Request) {
 		AIEnginePort:      8001,
 		AIEngineService:   "finsort-ai-engine",
 		AIFeatures:        features,
+		LLMConfigured:     llmConfigured,
+		LLMModel:          googleModel,
 	}
 	writeJSON(w, http.StatusOK, status)
+}
+
+// HandleHealth reports overall platform health including Go and Python AI engines.
+func (s *Store) HandleHealth(w http.ResponseWriter, r *http.Request) {
+	aiConnected, features, llmConfigured, googleModel := s.aiClient.GetStatusInfo()
+	resp := map[string]any{
+		"status":              "ok",
+		"service":             "finsort-backend",
+		"go_engine_connected": true,
+		"ai_engine_connected": aiConnected,
+		"llm_configured":      llmConfigured,
+		"google_model":        googleModel,
+		"features":            features,
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// HandleAILLMHealth reports live Gemini LLM connectivity, model latency, and active API key status.
+func (s *Store) HandleAILLMHealth(w http.ResponseWriter, r *http.Request) {
+	resp := s.aiClient.CheckLLMHealth()
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func (s *Store) computeDashboardSnapshot(checkAI bool) models.DashboardData {

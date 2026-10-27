@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"utho_backend/internal/api"
@@ -343,5 +344,38 @@ func TestStatusAndAIGatewayRoutes(t *testing.T) {
 	}
 	if brResp.Role != "finance" || len(brResp.BulletPoints) == 0 {
 		t.Fatalf("unexpected briefing response: %+v", brResp)
+	}
+
+	// 5. Health endpoint
+	reqH := httptest.NewRequest(http.MethodGet, "/api/v1/health", nil)
+	recH := httptest.NewRecorder()
+	handler.ServeHTTP(recH, reqH)
+	if recH.Code != http.StatusOK {
+		t.Fatalf("expected 200 on /api/v1/health, got %d", recH.Code)
+	}
+
+	// 6. LLM Health endpoint
+	reqLLMH := httptest.NewRequest(http.MethodGet, "/api/v1/ai/llm-health", nil)
+	recLLMH := httptest.NewRecorder()
+	handler.ServeHTTP(recLLMH, reqLLMH)
+	if recLLMH.Code != http.StatusOK {
+		t.Fatalf("expected 200 on /api/v1/ai/llm-health, got %d", recLLMH.Code)
+	}
+
+	// 7. Chat Greeting endpoint
+	chatBody := []byte(`{"message":"hi"}`)
+	reqChat := httptest.NewRequest(http.MethodPost, "/api/v1/chat", bytes.NewBuffer(chatBody))
+	reqChat.Header.Set("Content-Type", "application/json")
+	recChat := httptest.NewRecorder()
+	handler.ServeHTTP(recChat, reqChat)
+	if recChat.Code != http.StatusOK {
+		t.Fatalf("expected 200 on /api/v1/chat, got %d", recChat.Code)
+	}
+	var chatResp models.ChatResponse
+	if err := json.NewDecoder(recChat.Body).Decode(&chatResp); err != nil {
+		t.Fatalf("failed to decode chat response: %v", err)
+	}
+	if !strings.Contains(chatResp.Answer, "FinSort Copilot") || strings.Contains(chatResp.Answer, "tracking ₹") {
+		t.Fatalf("expected natural greeting, got: %s", chatResp.Answer)
 	}
 }

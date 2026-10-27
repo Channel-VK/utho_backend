@@ -45,9 +45,11 @@ func NewClient() *Client {
 }
 
 type pythonHealthResponse struct {
-	Status   string   `json:"status"`
-	Service  string   `json:"service"`
-	Features []string `json:"features"`
+	Status        string   `json:"status"`
+	Service       string   `json:"service"`
+	Features      []string `json:"features"`
+	LLMConfigured bool     `json:"llm_configured"`
+	GoogleModel   string   `json:"google_model"`
 }
 
 // CheckHealth pings GET http://localhost:8001/health to report live connection telemetry.
@@ -78,6 +80,69 @@ func (c *Client) CheckHealth() (bool, []string) {
 		h.Features = defaultFeatures()
 	}
 	return h.Status == "ok", h.Features
+}
+
+// GetStatusInfo returns health status, features, llm_configured, and google_model from Python engine.
+func (c *Client) GetStatusInfo() (bool, []string, bool, string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 1200*time.Millisecond)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/health", nil)
+	if err != nil {
+		return false, defaultFeatures(), false, ""
+	}
+
+	resp, err := c.healthClient.Do(req)
+	if err != nil {
+		return false, defaultFeatures(), false, ""
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return false, defaultFeatures(), false, ""
+	}
+
+	var h pythonHealthResponse
+	if err := json.NewDecoder(resp.Body).Decode(&h); err != nil {
+		return true, defaultFeatures(), false, ""
+	}
+	if len(h.Features) == 0 {
+		h.Features = defaultFeatures()
+	}
+	return h.Status == "ok", h.Features, h.LLMConfigured, h.GoogleModel
+}
+
+// CheckLLMHealth queries Python :8001 /api/v1/ai/llm-health for live Gemini API key connectivity and latency.
+func (c *Client) CheckLLMHealth() models.LLMHealthResponse {
+	ctx, cancel := context.WithTimeout(context.Background(), 8000*time.Millisecond)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/api/v1/ai/llm-health", nil)
+	if err != nil {
+		return models.LLMHealthResponse{
+			Status: "degraded",
+			Error:  err.Error(),
+		}
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return models.LLMHealthResponse{
+			Status: "degraded",
+			Error:  fmt.Sprintf("Failed to contact Python AI engine: %v", err),
+		}
+	}
+	defer resp.Body.Close()
+
+	var out models.LLMHealthResponse
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return models.LLMHealthResponse{
+			Status: "degraded",
+			Error:  fmt.Sprintf("Failed to decode LLM health response: %v", err),
+		}
+	}
+
+	return out
 }
 
 func defaultFeatures() []string {
@@ -228,6 +293,21 @@ func (c *Client) ParseNLScenario(query string, resources []models.Resource) mode
 			if resp.StatusCode == http.StatusOK {
 				var parsed models.NLScenarioResponse
 				if errDec := json.NewDecoder(resp.Body).Decode(&parsed); errDec == nil {
+					if parsed.Query == "" {
+						parsed.Query = query
+					}
+					if parsed.Provider == "" {
+						parsed.Provider = "Gemini LLM"
+					}
+					if parsed.Explanation == "" {
+						parsed.Explanation = fmt.Sprintf("AI scenario evaluated for policy query: %s", query)
+					}
+					if parsed.DetectedScope.Region != "" && parsed.ParsedParams.TargetRegion == "" {
+						parsed.ParsedParams.TargetRegion = parsed.DetectedScope.Region
+					}
+					if parsed.DetectedScope.Environment != "" && parsed.ParsedParams.TargetEnvironment == "" {
+						parsed.ParsedParams.TargetEnvironment = parsed.DetectedScope.Environment
+					}
 					parsed.SimulationResult = engine.Simulate(resources, parsed.ParsedParams)
 					return parsed
 				}
@@ -397,6 +477,11 @@ func parseNLScenarioFallback(query string) models.NLScenarioResponse {
 			fmt.Sprintf("Orphan Purge: >%dd", params.PurgeOrphanedOlderThanDays),
 		}
 	}
+
+	if region != "all" {
+		params.TargetRegion = region
+	}
+	params.TargetEnvironment = env
 
 	return models.NLScenarioResponse{
 		Query:        query,
@@ -860,13 +945,7 @@ func (c *Client) ChatWithContext(req models.ChatRequest, resources []models.Reso
 	// Check for conversational greetings
 	trimmedLower := strings.TrimSpace(lower)
 	if trimmedLower == "hi" || trimmedLower == "hello" || trimmedLower == "hey" || trimmedLower == "yo" || strings.HasPrefix(trimmedLower, "hi ") || strings.HasPrefix(trimmedLower, "hello ") {
-		ans := fmt.Sprintf(
-			"Hello! I am FinSort Copilot, your AI cloud infrastructure and FinOps intelligence assistant for Utho Cloud.\n"+
-				"I actively monitor 85 enterprise resources across Mumbai, Noida, and Bangalore—tracking ₹%.0f/mo in spend, "+
-				"₹%.0f/mo in approved savings, 3 active SRE anomaly alerts, and 90-day TFT forecasts.\n\n"+
-				"How can I help you optimize your fleet today?",
-			currentSpend, acceptedSavings,
-		)
+		ans := "Hello! I am FinSort Copilot, your Utho Cloud FinOps assistant. How can I help you optimize your fleet or explore What-If cost simulations today?"
 		return models.ChatResponse{
 			ConversationID: convID,
 			Answer:         ans,
