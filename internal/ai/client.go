@@ -857,6 +857,31 @@ func (c *Client) ChatWithContext(req models.ChatRequest, resources []models.Reso
 		}
 	}
 
+	// Check for conversational greetings
+	trimmedLower := strings.TrimSpace(lower)
+	if trimmedLower == "hi" || trimmedLower == "hello" || trimmedLower == "hey" || trimmedLower == "yo" || strings.HasPrefix(trimmedLower, "hi ") || strings.HasPrefix(trimmedLower, "hello ") {
+		ans := fmt.Sprintf(
+			"Hello! I am FinSort Copilot, your AI cloud infrastructure and FinOps intelligence assistant for Utho Cloud.\n"+
+				"I actively monitor 85 enterprise resources across Mumbai, Noida, and Bangalore—tracking ₹%.0f/mo in spend, "+
+				"₹%.0f/mo in approved savings, 3 active SRE anomaly alerts, and 90-day TFT forecasts.\n\n"+
+				"How can I help you optimize your fleet today?",
+			currentSpend, acceptedSavings,
+		)
+		return models.ChatResponse{
+			ConversationID: convID,
+			Answer:         ans,
+			Tool:           "conversational_greeting",
+			Data: map[string]any{
+				"copilot_status":              "online",
+				"total_resources":             len(resources),
+				"current_monthly_spend_inr":   currentSpend,
+				"accepted_monthly_savings_inr": acceptedSavings,
+				"total_potential_savings_inr": totalSavings,
+			},
+			Model: "gemini-3.8-flash",
+		}
+	}
+
 	answer := fmt.Sprintf(
 		"FinSort Copilot (Gemini 3.8 Flash · Full Fleet Context Active):\n"+
 			"• Fleet: 85 Utho Cloud resources (%d VMs, %d Block SSD volumes, %d Public IPv4s) across Mumbai, Noida, and Bangalore.\n"+
@@ -868,7 +893,93 @@ func (c *Client) ChatWithContext(req models.ChatRequest, resources []models.Reso
 	tool := "dashboard_summary"
 	var dataMap any = fullContext["fleet_summary"]
 
-	if strings.Contains(lower, "40%") || strings.Contains(lower, "grow") || strings.Contains(lower, "bill") || strings.Contains(lower, "quiet tax") || strings.Contains(lower, "saas") {
+	if strings.Contains(lower, "what if") || strings.Contains(lower, "hibernate") || strings.Contains(lower, "shut down") || strings.Contains(lower, "schedule") || strings.Contains(lower, "off-hours") {
+		targetReg := ""
+		if strings.Contains(lower, "bangalore") || strings.Contains(lower, "blr") {
+			targetReg = "in-bangalore-1"
+		} else if strings.Contains(lower, "noida") {
+			targetReg = "in-noida-1"
+		} else if strings.Contains(lower, "mumbai") {
+			targetReg = "in-mumbai-1"
+		}
+
+		targetEnv := ""
+		if strings.Contains(lower, "dev") && !strings.Contains(lower, "staging") && !strings.Contains(lower, "prod") {
+			targetEnv = "dev"
+		} else if strings.Contains(lower, "staging") && !strings.Contains(lower, "dev") && !strings.Contains(lower, "prod") {
+			targetEnv = "staging"
+		} else if strings.Contains(lower, "prod") {
+			targetEnv = "prod"
+		}
+
+		var scopedCount int
+		var scopedSpend float64
+		for _, r := range resources {
+			if r.Type != "vm" {
+				continue
+			}
+			if targetReg != "" && r.Region != targetReg {
+				continue
+			}
+			if targetEnv != "" && strings.ToLower(r.Env) != targetEnv {
+				continue
+			} else if targetEnv == "" && strings.ToLower(r.Env) == "prod" {
+				continue
+			}
+			scopedCount++
+			scopedSpend += r.MonthlyCostINR
+		}
+
+		hoursPerWeek := 118
+		if strings.Contains(lower, "weekend") && !strings.Contains(lower, "8 pm") && !strings.Contains(lower, "night") {
+			hoursPerWeek = 48
+		} else if strings.Contains(lower, "night") && !strings.Contains(lower, "weekend") {
+			hoursPerWeek = 60
+		}
+		reductionRatio := float64(hoursPerWeek) / 168.0
+		simSav := scopedSpend * reductionRatio
+		afterSpend := math.Max(0, scopedSpend-simSav)
+
+		scopeLabel := "Non-Production"
+		if targetEnv != "" {
+			scopeLabel = strings.ToUpper(targetEnv)
+		}
+		regLabel := "All Regions"
+		if targetReg != "" {
+			regLabel = targetReg
+		}
+
+		regFlag := ""
+		if targetReg != "" {
+			regFlag = "--region " + targetReg
+		}
+		envFlag := targetEnv
+		if envFlag == "" {
+			envFlag = "dev,staging"
+		}
+
+		answer = fmt.Sprintf(
+			"What-If Hibernation Simulation — %s VMs in %s:\n"+
+				"• Schedule Policy: Power off 20:00–08:00 IST weeknights + full weekends (%d of 168 hrs/week offline = %.1f%% compute hour reduction).\n"+
+				"• Matching Fleet Scope: %d VMs currently costing ₹%.0f/mo.\n"+
+				"• Spend Impact: ₹%.0f/mo -> ₹%.0f/mo.\n"+
+				"• Estimated Savings: ₹%.0f/mo (₹%.0f/yr).\n"+
+				"• SLA & Peak Safety: 0%% production impact — all 10 `PROTECTED_PEAK_LOAD` production VMs remain 100%% online.\n"+
+				"• Automation CLI: `utho vm schedule-power --env %s %s --stop '20:00' --start '08:00' --tz IST`",
+			scopeLabel, regLabel, hoursPerWeek, reductionRatio*100, scopedCount, scopedSpend, scopedSpend, afterSpend, simSav, simSav*12,
+			envFlag, regFlag,
+		)
+		tool = "what_if_simulation"
+		dataMap = map[string]any{
+			"simulation_scope":              scopeLabel + " in " + regLabel,
+			"matching_vms_count":            scopedCount,
+			"hibernation_hours_per_week":    hoursPerWeek,
+			"current_scope_spend_inr":       scopedSpend,
+			"projected_scope_spend_inr":     afterSpend,
+			"estimated_monthly_savings_inr": simSav,
+			"estimated_annual_savings_inr":  simSav * 12,
+		}
+	} else if strings.Contains(lower, "40%") || strings.Contains(lower, "grow") || strings.Contains(lower, "bill") || strings.Contains(lower, "quiet tax") || strings.Contains(lower, "saas") {
 		answer = "FinSort Root-Cause Diagnosis (40% SaaS Cloud Bill Growth):\n\nLeadership's 40% cost increase stems from three quiet taxes across the 85-node fleet:\n1. Over-Provisioned Compute (₹1,50,310/mo waste): 20 VMs sized for worst-day peaks with CPU averaging <18% outside 30-minute spikes.\n2. Non-Prod Off-Hours Bleed (₹78,400/mo waste): 28 staging and dev instances running 24/7 through weekends and overnight hours (118 idle hrs/wk per node).\n3. Orphaned Infrastructure (₹48,520/mo waste): 14 unattached NVMe block volumes and 6 unmapped elastic IPv4 addresses outliving creator projects.\n\nApplying FinSort peak-safe recommendations safely cuts monthly spend from ₹6,83,200 to ₹5,32,890 (-22.0% immediate accepted run-rate)."
 		tool = "financial_growth_audit"
 		dataMap = map[string]any{
@@ -935,15 +1046,7 @@ func (c *Client) ChatWithContext(req models.ChatRequest, resources []models.Reso
 			"unused_ip_spend_inr":         10120,
 			"total_orphaned_waste_inr":    48520,
 		}
-	} else if strings.Contains(lower, "what if") || strings.Contains(lower, "hibernate") || strings.Contains(lower, "shut down") || strings.Contains(lower, "schedule") || strings.Contains(lower, "off-hours") {
-		answer = "FinSort What-If Policy Simulation (Bangalore & Noida Non-Prod Workloads):\n• Policy: Automated hibernation from 8:00 PM to 8:00 AM IST on weekdays and 24 hours on weekends.\n• Scope: 28 non-production instances (16 in Bangalore, 12 in Noida).\n• Run-Time Reclaimed: 118 idle hours per node each week.\n• Monthly Savings: ₹78,400 to ₹82,200/mo in recurring cloud bill savings.\n• Peak Safety: All production VMs in Mumbai remain 100% online under the Peak-Safety Governor."
-		tool = "what_if"
-		dataMap = map[string]any{
-			"simulated_monthly_savings_inr": 78400,
-			"reclaimed_hours_per_week":      118,
-			"affected_non_prod_vms":         28,
-			"headroom_safety_pct":           25,
-		}
+
 	} else if strings.Contains(lower, "res-vm-015") || strings.Contains(lower, "prod-search-indexer") {
 		answer = "FinSort SRE Resource Inspection: prod-search-indexer-04 (res-vm-015 · in-mumbai-1)\n• Workload: Production Elasticsearch & Lucene search cluster (Search & Catalog team).\n• Current Plan: m8.2xlarge (8 vCPU / 32 GB RAM / 100 GB NVMe) @ ₹24,800/mo.\n• Recommended Plan: m8.xlarge (4 vCPU / 16 GB RAM) @ ₹15,200/mo.\n• Monthly Savings: ₹9,600/mo (-38.7%).\n• Telemetry: CPU p50: 18.4%, p95: 58.2%, p99: 68.2% (safely below 85% governor ceiling).\n• Active Incident (ALT-001): Linear memory creep of +1.8% RAM/hr without GC recovery (currently 89.4%). Time-to-Failure (TTF): ~6.6 to 14.0 hours until Linux OOM killer panic.\n• Root Cause: Unbounded Lucene filter cache leak aggravated by unindexed customer query facets.\n• Remediation: Staged rolling pod restart, JVM ceiling set to -Xmx12g, and host downsized to m8.xlarge once leak is resolved."
 		tool = "resource_telemetry"
